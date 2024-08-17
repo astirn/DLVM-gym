@@ -89,6 +89,7 @@ class VampPrior(lightning.LightningModule):
             u: torch.Tensor,
             learning_rate: float,
             categorical_prior: bool = False,
+            dirichlet_prior: bool = False,
     ):
         super().__init__()
 
@@ -99,6 +100,9 @@ class VampPrior(lightning.LightningModule):
         self.k = nn.Parameter(torch.as_tensor(self.u.shape[0]), requires_grad=False)
 
         self.categorical_prior = categorical_prior
+        self.dirichlet_prior = dirichlet_prior
+
+        self.alpha = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
@@ -109,6 +113,9 @@ class VampPrior(lightning.LightningModule):
 
     def qc_z(self, log_pz_c: torch.Tensor) -> distributions.Categorical:
         logits = log_pz_c
+        if self.dirichlet_prior:
+            alpha = F.softplus(self.alpha)
+            logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
         return distributions.Categorical(logits=logits)
 
     def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
@@ -121,6 +128,11 @@ class VampPrior(lightning.LightningModule):
         pc = distributions.Categorical(logits=torch.zeros(self.k, device=self.k.device))
         return distributions.kl_divergence(qc_z, pc)
 
+    def dkl_pi(self) -> torch.Tensor:
+        qpi = distributions.Dirichlet(F.softplus(self.alpha))
+        ppi = distributions.Dirichlet(torch.ones_like(self.alpha) / self.k)
+        return distributions.kl_divergence(qpi, ppi)
+
     def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, distributions.Distribution]):
         qz_x = self.qz_x(x)
         z = qz_x.rsample()
@@ -132,6 +144,7 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c).sum()
             # - (self.dkl_c(qc_z).sum() if self.categorical_prior else 0)
+            - (self.dkl_pi() if self.dirichlet_prior else 0)
         ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
@@ -178,6 +191,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=None)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
+    parser.add_argument('--dirichlet_prior', action='store_true', default=False)
 
 
     args = parser.parse_args()
@@ -212,6 +226,7 @@ if __name__ == '__main__':
         u=next(iter(dl_train))['x'][:args.max_clusters],
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
+        dirichlet_prior=args.dirichlet_prior,
     )
 
     # train model
