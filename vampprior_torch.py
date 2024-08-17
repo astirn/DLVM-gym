@@ -90,6 +90,7 @@ class VampPrior(lightning.LightningModule):
             learning_rate: float,
             categorical_prior: bool = False,
             dirichlet_prior: bool = False,
+            wishart_prior: bool = False,
     ):
         super().__init__()
 
@@ -101,6 +102,7 @@ class VampPrior(lightning.LightningModule):
 
         self.categorical_prior = categorical_prior
         self.dirichlet_prior = dirichlet_prior
+        self.wishart_prior = wishart_prior
 
         self.alpha = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
 
@@ -145,6 +147,12 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
+    def dkl_lambda(self):
+        if self.wishart_prior:
+            raise NotImplementedError
+        else:
+            return 0
+
     def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, distributions.Distribution]):
         qz_x = self.qz_x(x)
         z = qz_x.rsample()
@@ -156,6 +164,7 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
+            - self.dkl_lambda()
             - self.dkl_pi()
         ) / x.shape[0]
 
@@ -204,6 +213,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
+    parser.add_argument('--wishart_prior', action='store_true', default=False)
 
 
     args = parser.parse_args()
@@ -239,6 +249,7 @@ if __name__ == '__main__':
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
         dirichlet_prior=args.dirichlet_prior,
+        wishart_prior=args.wishart_prior,
     )
 
     # train model
