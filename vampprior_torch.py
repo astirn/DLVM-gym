@@ -85,14 +85,13 @@ class VampPrior(lightning.LightningModule):
 
     def evidence_lower_bound(self, x: torch.Tensor) -> torch.Tensor:
         qz_x = self.qz_x(x)
-        z = qz_x.sample()
+        z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
 
-        kl_factor = min(1., self.kl_warmup_step / self.kl_warmup_steps_max)
         elbo = (
-            self.px_z(z).log_prob(x).sum() -
-            self.dkl_z(qz_x, log_pz_c).sum() * kl_factor
+            self.px_z(z).log_prob(x).sum()
+            - self.dkl_z(qz_x, qc_z, log_pz_c).sum()
         ) / x.shape[0]
 
         return elbo
@@ -129,7 +128,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--kl_warmup_steps', type=int, default=5_000)
     parser.add_argument('--latent_dim', type=int, default=30)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_clusters', type=int, default=100)
@@ -165,7 +163,6 @@ if __name__ == '__main__':
         encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
         u=next(iter(dl_train))['x'][:args.max_clusters],
-        kl_warmup_steps=args.kl_warmup_steps,
         learning_rate=args.learning_rate,
     )
 
