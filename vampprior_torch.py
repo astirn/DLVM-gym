@@ -119,19 +119,31 @@ class VampPrior(lightning.LightningModule):
         return distributions.Categorical(logits=logits)
 
     def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
-        if self.categorical_prior:
-            return -qz_x.entropy() - (qc_z.probs * log_pz_c).sum(dim=-1)
+        dkl_z = -qz_x.entropy()
+        if self.categorical_prior or self.dirichlet_prior:
+            dkl_z -= (qc_z.probs * log_pz_c).sum(dim=-1)
         else:
-            return -qz_x.entropy() - torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
+            dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
+        return dkl_z.sum()
 
-    def dkl_c(self, qc_z: distributions.Categorical) -> torch.Tensor:
-        pc = distributions.Categorical(logits=torch.zeros(self.k, device=self.k.device))
-        return distributions.kl_divergence(qc_z, pc)
+    def dkl_c(self, qc_z: distributions.Categorical):
+        if self.dirichlet_prior:
+            alpha = F.softplus(self.alpha)
+            dkl_c = qc_z.probs * (F.log_softmax(qc_z.logits, dim=1) - torch.digamma(alpha) + torch.digamma(alpha.sum()))
+            return dkl_c.sum()
+        elif self.categorical_prior:
+            pc = distributions.Categorical(logits=torch.zeros(self.k, device=self.k.device))
+            return distributions.kl_divergence(qc_z, pc).sum()
+        else:
+            return 0
 
-    def dkl_pi(self) -> torch.Tensor:
-        qpi = distributions.Dirichlet(F.softplus(self.alpha))
-        ppi = distributions.Dirichlet(torch.ones_like(self.alpha) / self.k)
-        return distributions.kl_divergence(qpi, ppi)
+    def dkl_pi(self):
+        if self.dirichlet_prior:
+            qpi = distributions.Dirichlet(F.softplus(self.alpha))
+            ppi = distributions.Dirichlet(torch.ones_like(self.alpha) / self.k)
+            return distributions.kl_divergence(qpi, ppi)
+        else:
+            return 0
 
     def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, distributions.Distribution]):
         qz_x = self.qz_x(x)
@@ -142,9 +154,9 @@ class VampPrior(lightning.LightningModule):
 
         elbo = (
             self.px_z(z).log_prob(x).sum()
-            - self.dkl_z(qz_x, qc_z, log_pz_c).sum()
-            # - (self.dkl_c(qc_z).sum() if self.categorical_prior else 0)
-            - (self.dkl_pi() if self.dirichlet_prior else 0)
+            - self.dkl_z(qz_x, qc_z, log_pz_c)
+            - self.dkl_c(qc_z)
+            - self.dkl_pi()
         ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
