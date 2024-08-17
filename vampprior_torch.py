@@ -4,6 +4,7 @@ import lightning
 import torch
 import torch.distributions as distributions
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.datasets as datasets
 
 from cytoolz import merge_with, pipe
@@ -51,7 +52,7 @@ class Decoder(nn.Module):
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
     def forward(self, x: torch.Tensor) -> distributions.Distribution:
-        return distributions.Independent(distributions.Normal(self.mu(x), torch.exp(self.log_sigma)), 1)
+        return distributions.Independent(distributions.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
 class VampPrior(lightning.LightningModule):
 

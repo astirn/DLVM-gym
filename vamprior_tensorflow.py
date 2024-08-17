@@ -19,11 +19,11 @@ class Encoder(tf.keras.Model):
             tf.keras.layers.ReLU(),
             tf.keras.layers.Dense(2000),
             tf.keras.layers.ReLU(),
-            tf.keras.layers.Dense(tpl.MultivariateNormalTriL.params_size(dim_z)),
-            tpl.MultivariateNormalTriL(dim_z),
+            tf.keras.layers.Dense(tpl.IndependentNormal.params_size(dim_z)),
+            tpl.IndependentNormal(dim_z),
         ])
 
-    def call(self, x: tf.Tensor) -> tpd.MultivariateNormalTriL:
+    def call(self, x: tf.Tensor) -> tpd.Distribution:
         return self.net(x)
 
 class Decoder(tf.keras.Model):
