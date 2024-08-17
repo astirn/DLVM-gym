@@ -5,14 +5,40 @@ import torch
 import torch.distributions as distributions
 import torch.nn as nn
 import torch.nn.functional as F
+import torchmetrics
 import torchvision.datasets as datasets
 
 from cytoolz import merge_with, pipe
 from cytoolz.curried import map
-from torch.fx.experimental.unification.unification_tools import merge_with
+from sklearn.metrics.cluster import normalized_mutual_info_score
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 
+class ClusteringMetrics(torchmetrics.Metric):
+    def __init__(self, k):
+        super().__init__()
+        self.k = k
+        self.add_state('assignments', default=torch.zeros(self.k))
+        self.add_state('accuracy', default=torch.tensor(0.))
+        self.add_state('nmi', default=torch.tensor(0.))
+        self.add_state('num_batches', default=torch.tensor(0.))
+        self.add_state('num_samples', default=torch.tensor(0.))
+
+    def update(self, x: torch.Tensor, y: torch.Tensor, qc_z: distributions.Categorical, **kwargs) -> None:
+        y_hat = torch.argmax(qc_z.probs, dim=1)
+        cluster_labels = y[torch.argmax(qc_z.probs, dim=0)]
+        self.assignments += F.one_hot(y_hat, self.k).sum(dim=0)
+        self.accuracy += (y == cluster_labels[y_hat]).sum()
+        self.nmi += normalized_mutual_info_score(y.cpu(), y_hat.cpu())
+        self.num_batches += 1
+        self.num_samples += y.shape[0]
+
+    def compute(self) -> dict[str, torch.Tensor]:
+        return {
+            'clusters': (self.assignments > 0).sum(),
+            'acc': self.accuracy / self.num_samples,
+            'nmi': self.nmi / self.num_batches,
+        }
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
@@ -61,8 +87,8 @@ class VampPrior(lightning.LightningModule):
             encoder: torch.nn.Module,
             decoder: torch.nn.Module,
             u: torch.Tensor,
-            kl_warmup_steps: int,
             learning_rate: float,
+            categorical_prior: bool = False,
     ):
         super().__init__()
 
@@ -72,40 +98,57 @@ class VampPrior(lightning.LightningModule):
         self.u = nn.Parameter(u)
         self.k = nn.Parameter(torch.as_tensor(self.u.shape[0]), requires_grad=False)
 
-        self.kl_warmup_step = 0
-        self.kl_warmup_steps_max = kl_warmup_steps
+        self.categorical_prior = categorical_prior
+
+        self.clustering_metrics = ClusteringMetrics(k=self.k)
+
         self.learning_rate = learning_rate
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         return self.qz_x(self.u).log_prob(z[:, None])
 
-    def dkl_z(self, qz_x, log_pz_c):
-        dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
-        return dkl_z.sum()
+    def qc_z(self, log_pz_c: torch.Tensor) -> distributions.Categorical:
+        logits = log_pz_c
+        return distributions.Categorical(logits=logits)
 
-    def evidence_lower_bound(self, x: torch.Tensor) -> torch.Tensor:
+    def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
+        if self.categorical_prior:
+            return -qz_x.entropy() - (qc_z.probs * log_pz_c).sum(dim=-1)
+        else:
+            return -qz_x.entropy() - torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
+
+    def dkl_c(self, qc_z: distributions.Categorical) -> torch.Tensor:
+        pc = distributions.Categorical(logits=torch.zeros(self.k, device=self.k.device))
+        return distributions.kl_divergence(qc_z, pc)
+
+    def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, distributions.Distribution]):
         qz_x = self.qz_x(x)
         z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
+        qc_z = self.qc_z(log_pz_c)
 
         elbo = (
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c).sum()
+            # - (self.dkl_c(qc_z).sum() if self.categorical_prior else 0)
         ) / x.shape[0]
 
-        return elbo
+        return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
     def training_step(self, batch, batch_idx):
-        elbo = self.evidence_lower_bound(batch['x'])
-        self.kl_warmup_step = min(self.kl_warmup_step + 1, self.kl_warmup_steps_max)
+        elbo, _ = self.evidence_lower_bound(batch['x'])
         self.log("train_elbo", elbo, prog_bar=True)
         return elbo
 
     def validation_step(self, batch, batch_idx):
-        elbo = self.evidence_lower_bound(batch['x'])
+        elbo, variational_family = self.evidence_lower_bound(batch['x'])
         self.log("val_elbo", elbo, on_epoch=True, prog_bar=True, batch_size=batch['x'].shape[0])
+        self.clustering_metrics.update(**{**batch, **variational_family})
 
+    def on_validation_epoch_end(self) -> None:
+        self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
+        self.clustering_metrics.reset()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
@@ -124,8 +167,8 @@ def collate(batch):
 
 if __name__ == '__main__':
 
-    # script arguments
     parser = argparse.ArgumentParser()
+
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
@@ -133,6 +176,10 @@ if __name__ == '__main__':
     parser.add_argument('--max_clusters', type=int, default=100)
     parser.add_argument('--max_epochs', type=int, default=10_000)
     parser.add_argument('--seed', type=int, default=None)
+
+    parser.add_argument('--categorical_prior', action='store_true', default=False)
+
+
     args = parser.parse_args()
     assert args.batch_size > args.max_clusters, 'pseudo-inputs initialization makes this assumption'
 
@@ -164,6 +211,7 @@ if __name__ == '__main__':
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
         u=next(iter(dl_train))['x'][:args.max_clusters],
         learning_rate=args.learning_rate,
+        categorical_prior=args.categorical_prior,
     )
 
     # train model
