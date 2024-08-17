@@ -111,7 +111,11 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
-        return self.qz_x(self.u).log_prob(z[:, None])
+        pz_c = self.qz_x(self.u)
+        if self.wishart_prior:
+            raise NotImplementedError
+        else:
+            return pz_c.log_prob(z[:, None])
 
     def qc_z(self, log_pz_c: torch.Tensor) -> distributions.Categorical:
         logits = log_pz_c
