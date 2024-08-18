@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 import lightning
 import torch
-import torch.distributions as distributions
+import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
@@ -24,7 +24,7 @@ class ClusteringMetrics(torchmetrics.Metric):
         self.add_state('num_batches', default=torch.tensor(0.))
         self.add_state('num_samples', default=torch.tensor(0.))
 
-    def update(self, x: torch.Tensor, y: torch.Tensor, qc_z: distributions.Categorical, **kwargs) -> None:
+    def update(self, x: torch.Tensor, y: torch.Tensor, qc_z: dist.Categorical, **kwargs) -> None:
         y_hat = torch.argmax(qc_z.probs, dim=1)
         cluster_labels = y[torch.argmax(qc_z.probs, dim=0)]
         self.assignments += F.one_hot(y_hat, self.k).sum(dim=0)
@@ -57,11 +57,11 @@ class Encoder(nn.Module):
             nn.Softplus()
         )
 
-    def forward(self, x: torch.Tensor) -> distributions.MultivariateNormal:
+    def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
         sigma = self.sigma(out)
-        return distributions.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 class Decoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
@@ -77,8 +77,8 @@ class Decoder(nn.Module):
         )
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
-    def forward(self, x: torch.Tensor) -> distributions.Distribution:
-        return distributions.Independent(distributions.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
+    def forward(self, x: torch.Tensor) -> dist.Distribution:
+        return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
 class VampPrior(lightning.LightningModule):
 
@@ -122,12 +122,14 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z[:, None])
 
-    def qc_z(self, log_pz_c: torch.Tensor) -> distributions.Categorical:
+    def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         logits = log_pz_c
         if self.dirichlet_prior:
             alpha = F.softplus(self.alpha)
             logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
-        return distributions.Categorical(logits=logits)
+        elif self.categorical_prior:
+            logits -= torch.log(self.k)
+        return dist.Categorical(logits=logits)
 
     def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
         dkl_z = -qz_x.entropy()
@@ -137,22 +139,22 @@ class VampPrior(lightning.LightningModule):
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
         return dkl_z.sum()
 
-    def dkl_c(self, qc_z: distributions.Categorical):
+    def dkl_c(self, qc_z: dist.Categorical):
         if self.dirichlet_prior:
             alpha = F.softplus(self.alpha)
             dkl_c = qc_z.probs * (F.log_softmax(qc_z.logits, dim=1) - torch.digamma(alpha) + torch.digamma(alpha.sum()))
             return dkl_c.sum()
         elif self.categorical_prior:
-            pc = distributions.Categorical(logits=torch.zeros(self.k, device=self.k.device))
-            return distributions.kl_divergence(qc_z, pc).sum()
+            pc = dist.Categorical(logits=torch.zeros(self.k, device=self.k.device))
+            return dist.kl_divergence(qc_z, pc).sum()
         else:
             return 0
 
     def dkl_pi(self):
         if self.dirichlet_prior:
-            qpi = distributions.Dirichlet(F.softplus(self.alpha))
-            ppi = distributions.Dirichlet(torch.ones_like(self.alpha) / self.k)
-            return distributions.kl_divergence(qpi, ppi)
+            qpi = dist.Dirichlet(F.softplus(self.alpha))
+            ppi = dist.Dirichlet(torch.ones_like(self.alpha) / self.k)
+            return dist.kl_divergence(qpi, ppi)
         else:
             return 0
 
@@ -162,7 +164,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, distributions.Distribution]):
+    def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, dist.Distribution]):
         qz_x = self.qz_x(x)
         z = qz_x.rsample()
 
