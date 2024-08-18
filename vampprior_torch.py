@@ -84,8 +84,10 @@ class VampPrior(lightning.LightningModule):
 
     def __init__(
             self,
-            encoder: torch.nn.Module,
-            decoder: torch.nn.Module,
+            dim_x: int,
+            dim_z: int,
+            encoder: callable,
+            decoder: callable,
             u: torch.Tensor,
             learning_rate: float,
             categorical_prior: bool = False,
@@ -94,8 +96,11 @@ class VampPrior(lightning.LightningModule):
     ):
         super().__init__()
 
-        self.qz_x = encoder
-        self.px_z = decoder
+        self.dim_x = dim_x
+        self.dim_z = dim_z
+
+        self.qz_x = encoder(self.dim_x, self.dim_z)
+        self.px_z = decoder(self.dim_x, self.dim_z)
 
         self.u = nn.Parameter(u)
         self.k = nn.Parameter(torch.as_tensor(self.u.shape[0]), requires_grad=False)
@@ -247,8 +252,10 @@ if __name__ == '__main__':
     # build model
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
-        encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
-        decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
+        dim_x=data_dim,
+        dim_z=args.latent_dim,
+        encoder=Encoder,
+        decoder=Decoder,
         u=next(iter(dl_train))['x'][:args.max_clusters],
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
