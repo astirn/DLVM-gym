@@ -123,10 +123,13 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z[:, None])
 
+    def alpha(self):
+        return dist.transform_to(dist.Dirichlet.arg_constraints['concentration'])(self.alpha_uc)
+
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         logits = log_pz_c
         if self.dirichlet_prior:
-            alpha = F.softplus(self.alpha_uc)
+            alpha = self.alpha()
             logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.categorical_prior:
             logits -= torch.log(self.k)
@@ -142,7 +145,7 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_c(self, qc_z: dist.Categorical):
         if self.dirichlet_prior:
-            alpha = F.softplus(self.alpha_uc)
+            alpha = self.alpha()
             dkl_c = qc_z.probs * (F.log_softmax(qc_z.logits, dim=1) - torch.digamma(alpha) + torch.digamma(alpha.sum()))
             return dkl_c.sum()
         elif self.categorical_prior:
