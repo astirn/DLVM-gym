@@ -109,7 +109,8 @@ class VampPrior(lightning.LightningModule):
         self.dirichlet_prior = dirichlet_prior
         self.wishart_prior = wishart_prior
 
-        self.alpha = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
+        # global variational parameters
+        self.alpha_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
@@ -125,7 +126,7 @@ class VampPrior(lightning.LightningModule):
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         logits = log_pz_c
         if self.dirichlet_prior:
-            alpha = F.softplus(self.alpha)
+            alpha = F.softplus(self.alpha_uc)
             logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.categorical_prior:
             logits -= torch.log(self.k)
@@ -141,7 +142,7 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_c(self, qc_z: dist.Categorical):
         if self.dirichlet_prior:
-            alpha = F.softplus(self.alpha)
+            alpha = F.softplus(self.alpha_uc)
             dkl_c = qc_z.probs * (F.log_softmax(qc_z.logits, dim=1) - torch.digamma(alpha) + torch.digamma(alpha.sum()))
             return dkl_c.sum()
         elif self.categorical_prior:
@@ -152,8 +153,8 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_pi(self):
         if self.dirichlet_prior:
-            qpi = dist.Dirichlet(F.softplus(self.alpha))
-            ppi = dist.Dirichlet(torch.ones_like(self.alpha) / self.k)
+            qpi = dist.Dirichlet(F.softplus(self.alpha_uc))
+            ppi = dist.Dirichlet(torch.ones_like(self.alpha_uc) / self.k)
             return dist.kl_divergence(qpi, ppi)
         else:
             return 0
