@@ -146,7 +146,7 @@ class VampPrior(lightning.LightningModule):
     def dkl_c(self, qc_z: dist.Categorical):
         if self.dirichlet_prior:
             alpha = self.alpha()
-            dkl_c = qc_z.probs * (F.log_softmax(qc_z.logits, dim=1) - torch.digamma(alpha) + torch.digamma(alpha.sum()))
+            dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
         elif self.categorical_prior:
             pc = dist.Categorical(logits=torch.zeros(self.k, device=self.k.device))
