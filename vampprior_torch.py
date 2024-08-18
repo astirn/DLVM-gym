@@ -111,17 +111,33 @@ class VampPrior(lightning.LightningModule):
 
         # global variational parameters
         self.alpha_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
+        self.n_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.wishart_prior)
+        self.V_uc = nn.Parameter(torch.eye(self.dim_z)[None].repeat(self.k, 1, 1), requires_grad=self.wishart_prior)
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
         self.learning_rate = learning_rate
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
+        z = z[:, None]
         pz_c = self.qz_x(self.u)
         if self.wishart_prior:
-            raise NotImplementedError
+            n = dist.transform_to(dist.Wishart.arg_constraints['df'])(self.n_uc)
+            V = dist.transform_to(dist.Wishart.arg_constraints['precision_matrix'])(self.V_uc)
+            log_det = (
+                    torch.stack([torch.digamma(n / 2 + (1 - i) / 2) for i in range(self.dim_z)]).sum(dim=0) +
+                    self.dim_z * np.log(2) +
+                    torch.linalg.slogdet(V)[1]
+            )
+            residuals = z - pz_c.mean
+            quadratic = torch.squeeze(
+                torch.unsqueeze(residuals, dim=2) @
+                (n[:, None, None] * V) @
+                torch.unsqueeze(residuals, dim=3)
+            )
+            return 0.5 * (-self.dim_z * np.log(2 * np.pi) + log_det - quadratic)
         else:
-            return pz_c.log_prob(z[:, None])
+            return pz_c.log_prob(z)
 
     def alpha(self):
         return dist.transform_to(dist.Dirichlet.arg_constraints['concentration'])(self.alpha_uc)
