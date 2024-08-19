@@ -83,6 +83,15 @@ class Decoder(nn.Module):
 def softplus_inverse(x):
     return x + torch.log(-torch.expm1(-x))
 
+def multivariate_digamma(a, p):
+    return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
+
+def multivariate_log_gamma(a, p):
+    mlg = p * (p - 1) / 4 * np.log(np.pi)
+    mlg += torch.stack([torch.lgamma(a + (i - 1) / 2) for i in range(1, p + 1)]).sum(dim=0)
+    return mlg
+
+
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -133,13 +142,8 @@ class VampPrior(lightning.LightningModule):
         z = z[:, None]
         pz_c = self.qz_x(self.u)
         if self.wishart_prior:
-            n = dist.transform_to(dist.Wishart.arg_constraints['df'])(self.n_uc)
-            V = dist.transform_to(dist.Wishart.arg_constraints['precision_matrix'])(self.V_uc)
-            log_det = (
-                    torch.stack([torch.digamma(n / 2 + (1 - i) / 2) for i in range(self.dim_z)]).sum(dim=0) +
-                    self.dim_z * np.log(2) +
-                    torch.linalg.slogdet(V)[1]
-            )
+            n, V = self.n_and_V()
+            log_det = multivariate_digamma(n / 2, self.dim_z) + self.dim_z * np.log(2) + torch.linalg.slogdet(V)[1]
             residuals = z - pz_c.mean
             quadratic = torch.squeeze(
                 torch.unsqueeze(residuals, dim=2) @
