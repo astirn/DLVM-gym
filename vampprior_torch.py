@@ -91,7 +91,6 @@ def multivariate_log_gamma(a, p):
     mlg += torch.stack([torch.lgamma(a + (i - 1) / 2) for i in range(1, p + 1)]).sum(dim=0)
     return mlg
 
-
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -124,7 +123,7 @@ class VampPrior(lightning.LightningModule):
         # global variational parameters
         self.alpha_uc = nn.Parameter(softplus_inverse(torch.ones(self.k)), requires_grad=self.dirichlet_prior)
         self.n_uc = nn.Parameter(softplus_inverse(self.dim_z * torch.ones(self.k) + 2), requires_grad=self.wishart_prior)
-        self.V_uc = nn.Parameter(torch.eye(self.dim_z)[None].repeat(self.k, 1, 1), requires_grad=self.wishart_prior)
+        self.V_uc = nn.Parameter(torch.ones(self.dim_z)[None].repeat(self.k, 1), requires_grad=self.wishart_prior)
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
@@ -135,7 +134,7 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        V = dist.transform_to(dist.Wishart.arg_constraints['precision_matrix'])(self.V_uc)
+        V = torch.diag_embed(F.softplus(self.V_uc))
         return n, V
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
@@ -193,7 +192,20 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_Lambda(self):
         if self.wishart_prior:
-            raise NotImplementedError
+            n_q, V_q = self.n_and_V()
+            n_p = torch.tensor([self.dim_z + 2]).to(n_q.device)
+            V_p = torch.eye(self.dim_z).to(V_q.device) * self.k ** (2 / self.dim_z)# / (self.dim_z + 2)
+            V_p_inv = torch.diag_embed(1 / torch.diag(V_p))
+            # https://statproofbook.github.io/P/wish-kl.html
+            dkl_Lambda = (
+                    n_p * (torch.slogdet(V_p)[1] - torch.slogdet(V_q)[1]) +
+                    n_q * torch.einsum('bij->b', V_p_inv @ V_q) +
+                    2 * multivariate_log_gamma(n_p / 2, self.dim_z) -
+                    2 * multivariate_log_gamma(n_q / 2, self.dim_z) +
+                    (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z) -
+                    n_p * self.dim_z
+            ) / 2
+            return dkl_Lambda.sum()
         else:
             return 0
 
