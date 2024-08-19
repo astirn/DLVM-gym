@@ -80,6 +80,9 @@ class Decoder(nn.Module):
     def forward(self, x: torch.Tensor) -> dist.Distribution:
         return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
+def softplus_inverse(x):
+    return x + torch.log(-torch.expm1(-x))
+
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -110,13 +113,21 @@ class VampPrior(lightning.LightningModule):
         self.wishart_prior = wishart_prior
 
         # global variational parameters
-        self.alpha_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.dirichlet_prior)
-        self.n_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.wishart_prior)
+        self.alpha_uc = nn.Parameter(softplus_inverse(torch.ones(self.k)), requires_grad=self.dirichlet_prior)
+        self.n_uc = nn.Parameter(softplus_inverse(self.dim_z * torch.ones(self.k) + 2), requires_grad=self.wishart_prior)
         self.V_uc = nn.Parameter(torch.eye(self.dim_z)[None].repeat(self.k, 1, 1), requires_grad=self.wishart_prior)
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
         self.learning_rate = learning_rate
+
+    def alpha(self):
+        return F.softplus(self.alpha_uc)
+
+    def n_and_V(self):
+        n = F.softplus(self.n_uc)
+        V = dist.transform_to(dist.Wishart.arg_constraints['precision_matrix'])(self.V_uc)
+        return n, V
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
@@ -138,9 +149,6 @@ class VampPrior(lightning.LightningModule):
             return 0.5 * (-self.dim_z * np.log(2 * np.pi) + log_det - quadratic)
         else:
             return pz_c.log_prob(z)
-
-    def alpha(self):
-        return dist.transform_to(dist.Dirichlet.arg_constraints['concentration'])(self.alpha_uc)
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         logits = log_pz_c
@@ -172,13 +180,14 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_pi(self):
         if self.dirichlet_prior:
-            qpi = dist.Dirichlet(F.softplus(self.alpha_uc))
-            ppi = dist.Dirichlet(torch.ones_like(self.alpha_uc) / self.k)
+            alpha = self.alpha()
+            qpi = dist.Dirichlet(alpha)
+            ppi = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(qpi, ppi)
         else:
             return 0
 
-    def dkl_lambda(self):
+    def dkl_Lambda(self):
         if self.wishart_prior:
             raise NotImplementedError
         else:
@@ -195,8 +204,8 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_lambda()
             - self.dkl_pi()
+            - self.dkl_Lambda()
         ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
@@ -237,7 +246,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=1e-3)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--max_clusters', type=int, default=100)
     parser.add_argument('--max_epochs', type=int, default=10_000)
     parser.add_argument('--seed', type=int, default=None)
