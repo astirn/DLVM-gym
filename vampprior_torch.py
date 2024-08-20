@@ -155,7 +155,7 @@ class VampPrior(lightning.LightningModule):
             logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.categorical_prior:
             logits -= torch.log(self.k)
-        return dist.Categorical(logits=logits)
+        return dist.Categorical(probs=F.softmax(logits, dim=1))
 
     def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
         dkl_z = -qz_x.entropy()
