@@ -284,6 +284,7 @@ if __name__ == '__main__':
     dl_kwargs = {
         'batch_size': args.batch_size,
         'collate_fn': collate,
+        'drop_last': True,
         'num_workers': 4,
         'persistent_workers': True,
         'pin_memory': True
