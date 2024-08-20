@@ -1,7 +1,7 @@
 import argparse
-import numpy as np
 import lightning
 import lightning.pytorch.callbacks as callbacks
+import numpy as np
 import torch
 import torch.distributions as dist
 import torch.nn as nn
@@ -116,7 +116,7 @@ class VampPrior(lightning.LightningModule):
         self.dirichlet_prior = dirichlet_prior
         self.wishart_prior = wishart_prior
 
-        # global variational parameters
+        # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
             softplus_inverse(torch.ones(self.k)),
             requires_grad=self.dirichlet_prior
@@ -140,7 +140,7 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])
+        L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])  # TODO: vectorize this somehow
         L += torch.diag_embed(F.softplus(torch.diagonal(self.L_uc, dim1=-1, dim2=-2)) + 1e-5)
         return n, L @ L.mT
 
@@ -149,14 +149,18 @@ class VampPrior(lightning.LightningModule):
         pz_c = self.qz_x(self.u)
         if self.wishart_prior:
             n, V = self.n_and_V()
-            log_det = multivariate_digamma(n / 2, self.dim_z) + self.dim_z * np.log(2) + torch.linalg.slogdet(V)[1]
+            log_det = (
+                    multivariate_digamma(n / 2, self.dim_z) +
+                    self.dim_z * torch.log(torch.as_tensor(2)) +
+                    torch.linalg.slogdet(V)[1]
+            )
             residuals = z - pz_c.mean
             quadratic = torch.squeeze(
                 torch.unsqueeze(residuals, dim=2)
                 @ (n[:, None, None] * V) @
                 torch.unsqueeze(residuals, dim=3)
             )
-            return 0.5 * (-self.dim_z * np.log(2 * np.pi) + log_det - quadratic)
+            return 0.5 * (-self.dim_z * torch.log(torch.as_tensor(2 * torch.pi)) + log_det - quadratic)
         else:
             return pz_c.log_prob(z)
 
@@ -322,6 +326,6 @@ if __name__ == '__main__':
     trainer = lightning.Trainer(
         max_epochs=args.max_epochs,
         devices=1,
-        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=10, mode='max')],
+        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=100, mode='max')],
     )
     trainer.fit(model, dl_train, dl_test)
