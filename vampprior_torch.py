@@ -86,11 +86,6 @@ def softplus_inverse(x):
 def multivariate_digamma(a, p):
     return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
 
-def multivariate_log_gamma(a, p):
-    mlg = p * (p - 1) / 4 * np.log(np.pi)
-    mlg += torch.stack([torch.lgamma(a + (i - 1) / 2) for i in range(1, p + 1)]).sum(dim=0)
-    return mlg
-
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -200,8 +195,8 @@ class VampPrior(lightning.LightningModule):
             dkl_Lambda = (
                     n_p * (torch.slogdet(V_p)[1] - torch.slogdet(V_q)[1]) +
                     n_q * torch.einsum('bij->b', V_p_inv @ V_q) +
-                    2 * multivariate_log_gamma(n_p / 2, self.dim_z) -
-                    2 * multivariate_log_gamma(n_q / 2, self.dim_z) +
+                    2 * torch.mvlgamma(n_p / 2, self.dim_z) -
+                    2 * torch.mvlgamma(n_q / 2, self.dim_z) +
                     (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z) -
                     n_p * self.dim_z
             ) / 2
