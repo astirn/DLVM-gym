@@ -277,7 +277,6 @@ if __name__ == '__main__':
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
     parser.add_argument('--wishart_prior', action='store_true', default=False)
 
-
     args = parser.parse_args()
     assert args.batch_size > args.max_clusters, 'pseudo-inputs initialization makes this assumption'
 
