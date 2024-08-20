@@ -124,7 +124,7 @@ class VampPrior(lightning.LightningModule):
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
-        diag_init = softplus_inverse(self.k ** (1 / self.dim_z) / self.n_uc[0] ** 0.5)
+        diag_init = softplus_inverse(self.k ** (1 / self.dim_z) / (self.dim_z + 2) ** 0.5)
         self.L_uc = nn.Parameter(
             torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * diag_init,
             requires_grad=self.wishart_prior
@@ -203,7 +203,7 @@ class VampPrior(lightning.LightningModule):
     def dkl_Lambda(self):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
-            n_p = torch.tensor([self.dim_z + 2]).to(n_q.device)
+            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
             V_p = torch.eye(self.dim_z).to(V_q.device) * self.k ** (2 / self.dim_z) / (self.dim_z + 2)
             V_p_inv = torch.diag(1 / torch.diag(V_p))
             # https://statproofbook.github.io/P/wish-kl.html
