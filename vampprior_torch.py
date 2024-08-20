@@ -9,8 +9,7 @@ import torch.nn.functional as F
 import torchmetrics
 import torchvision.datasets as datasets
 
-from cytoolz import merge_with, pipe
-from cytoolz.curried import map
+from cytoolz import merge_with
 from sklearn.metrics.cluster import normalized_mutual_info_score
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
@@ -165,13 +164,13 @@ class VampPrior(lightning.LightningModule):
             return pz_c.log_prob(z)
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
-        logits = log_pz_c
+        log_probs = log_pz_c
         if self.dirichlet_prior:
             alpha = self.alpha()
-            logits += torch.digamma(alpha) - torch.digamma(alpha.sum())
+            log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.categorical_prior:
-            logits -= torch.log(self.k)
-        return dist.Categorical(probs=F.softmax(logits, dim=1))
+            log_probs -= torch.log(self.k)
+        return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
     def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
         dkl_z = -qz_x.entropy()
@@ -256,11 +255,7 @@ class VampPrior(lightning.LightningModule):
         return optimizer
 
 def collate(batch):
-    batch = pipe(
-        batch,
-        map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}),
-        list
-    )
+    batch = list(map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}, batch))
     batch = merge_with(torch.vstack, batch)
     batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
     batch['y'] = batch['y'].squeeze()
