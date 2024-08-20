@@ -140,8 +140,8 @@ class VampPrior(lightning.LightningModule):
             log_det = multivariate_digamma(n / 2, self.dim_z) + self.dim_z * np.log(2) + torch.linalg.slogdet(V)[1]
             residuals = z - pz_c.mean
             quadratic = torch.squeeze(
-                torch.unsqueeze(residuals, dim=2) @
-                (n[:, None, None] * V) @
+                torch.unsqueeze(residuals, dim=2)
+                @ (n[:, None, None] * V) @
                 torch.unsqueeze(residuals, dim=3)
             )
             return 0.5 * (-self.dim_z * np.log(2 * np.pi) + log_det - quadratic)
@@ -171,7 +171,7 @@ class VampPrior(lightning.LightningModule):
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
         elif self.categorical_prior:
-            pc = dist.Categorical(logits=torch.zeros(self.k, device=self.k.device))
+            pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
         else:
             return 0
@@ -189,8 +189,8 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.tensor([self.dim_z + 2]).to(n_q.device)
-            V_p = torch.eye(self.dim_z).to(V_q.device) * self.k ** (2 / self.dim_z)# / (self.dim_z + 2)
-            V_p_inv = torch.diag_embed(1 / torch.diag(V_p))
+            V_p = torch.eye(self.dim_z).to(V_q.device) * self.k ** (2 / self.dim_z) / (self.dim_z + 2)
+            V_p_inv = torch.diag(1 / torch.diag(V_p))
             # https://statproofbook.github.io/P/wish-kl.html
             dkl_Lambda = (
                     n_p * (torch.slogdet(V_p)[1] - torch.slogdet(V_q)[1]) +
