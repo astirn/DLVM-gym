@@ -116,9 +116,18 @@ class VampPrior(lightning.LightningModule):
         self.wishart_prior = wishart_prior
 
         # global variational parameters
-        self.alpha_uc = nn.Parameter(softplus_inverse(torch.ones(self.k)), requires_grad=self.dirichlet_prior)
-        self.n_uc = nn.Parameter(softplus_inverse(self.dim_z * torch.ones(self.k) + 2), requires_grad=self.wishart_prior)
-        self.V_uc = nn.Parameter(torch.ones(self.dim_z)[None].repeat(self.k, 1), requires_grad=self.wishart_prior)
+        self.alpha_uc = nn.Parameter(
+            softplus_inverse(torch.ones(self.k)),
+            requires_grad=self.dirichlet_prior
+        )
+        self.n_uc = nn.Parameter(
+            softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
+            requires_grad=self.wishart_prior
+        )
+        self.L_uc = nn.Parameter(
+            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * softplus_inverse(1 / self.n_uc[0]),
+            requires_grad=self.wishart_prior
+        )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
@@ -129,8 +138,9 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        V = torch.diag_embed(F.softplus(self.V_uc))
-        return n, V
+        L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])
+        L += torch.diag_embed(F.softplus(torch.diagonal(self.L_uc, dim1=-1, dim2=-2)) + 1e-5)
+        return n, L @ L.mT
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
