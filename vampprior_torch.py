@@ -125,8 +125,9 @@ class VampPrior(lightning.LightningModule):
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
+        diag_init = softplus_inverse(self.k ** (1 / self.dim_z) / self.n_uc[0] ** 0.5)
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * softplus_inverse(1 / self.n_uc[0]),
+            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * diag_init,
             requires_grad=self.wishart_prior
         )
 
