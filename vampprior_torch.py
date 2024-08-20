@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import lightning
+import lightning.pytorch.callbacks as callbacks
 import torch
 import torch.distributions as dist
 import torch.nn as nn
@@ -317,5 +318,9 @@ if __name__ == '__main__':
     )
 
     # train model
-    trainer = lightning.Trainer(max_epochs=args.max_epochs, devices=1)
+    trainer = lightning.Trainer(
+        max_epochs=args.max_epochs,
+        devices=1,
+        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=10, mode='max')],
+    )
     trainer.fit(model, dl_train, dl_test)
