@@ -204,16 +204,14 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            V_p = torch.eye(self.dim_z).to(V_q.device) * self.k ** (2 / self.dim_z) / (self.dim_z + 2)
-            V_p_inv = torch.diag(1 / torch.diag(V_p))
-            # https://statproofbook.github.io/P/wish-kl.html
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
+            V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
-                    n_p * (torch.slogdet(V_p)[1] - torch.slogdet(V_q)[1]) +
-                    n_q * torch.einsum('bij->b', V_p_inv @ V_q) +
-                    2 * torch.mvlgamma(n_p / 2, self.dim_z) -
-                    2 * torch.mvlgamma(n_q / 2, self.dim_z) +
-                    (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z) -
-                    n_p * self.dim_z
+                    - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
+                    + n_q * (torch.einsum('bii->b', V_p_inv_V_q) - self.dim_z)
+                    + 2 * torch.mvlgamma(n_p / 2, self.dim_z)
+                    - 2 * torch.mvlgamma(n_q / 2, self.dim_z)
+                    + (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z)
             ) / 2
             return dkl_Lambda.sum()
         else:
