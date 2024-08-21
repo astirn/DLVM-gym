@@ -14,6 +14,7 @@ from sklearn.metrics.cluster import normalized_mutual_info_score
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 
+
 class ClusteringMetrics(torchmetrics.Metric):
     def __init__(self, k):
         super().__init__()
@@ -40,6 +41,7 @@ class ClusteringMetrics(torchmetrics.Metric):
             'nmi': self.nmi / self.num_batches,
         }
 
+
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
@@ -63,6 +65,7 @@ class Encoder(nn.Module):
         sigma = self.sigma(out)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
+
 class Decoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
@@ -80,11 +83,14 @@ class Decoder(nn.Module):
     def forward(self, x: torch.Tensor) -> dist.Distribution:
         return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
+
 def softplus_inverse(x):
     return x + torch.log(-torch.expm1(-x))
 
+
 def multivariate_digamma(a, p):
     return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
+
 
 class VampPrior(lightning.LightningModule):
 
@@ -172,7 +178,7 @@ class VampPrior(lightning.LightningModule):
             log_probs -= torch.log(self.k)
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
-    def dkl_z(self, qz_x, qc_z, log_pz_c)-> torch.Tensor:
+    def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
         dkl_z = -qz_x.entropy()
         if self.categorical_prior or self.dirichlet_prior:
             dkl_z -= (qc_z.probs * log_pz_c).sum(dim=-1)
@@ -252,12 +258,14 @@ class VampPrior(lightning.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
         return optimizer
 
+
 def collate(batch):
     batch = list(map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}, batch))
     batch = merge_with(torch.vstack, batch)
     batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
     batch['y'] = batch['y'].squeeze()
     return batch
+
 
 if __name__ == '__main__':
 
