@@ -276,7 +276,7 @@ if __name__ == '__main__':
     parser.add_argument('--latent_dim', type=int, default=30)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--max_clusters', type=int, default=100)
-    parser.add_argument('--max_epochs', type=int, default=10_000)
+    parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
