@@ -324,8 +324,10 @@ if __name__ == '__main__':
 
     # train model
     trainer = lightning.Trainer(
-        max_epochs=args.max_epochs,
+        callbacks=[callbacks.EarlyStopping(monitor='val_elbo', patience=20, mode='max')],
         devices=1,
-        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=100, mode='max')],
+        enable_checkpointing=False,
+        logger=False,
+        max_epochs=args.max_epochs,
     )
     trainer.fit(model, dl_train, dl_test)
