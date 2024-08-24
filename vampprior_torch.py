@@ -104,6 +104,7 @@ class VampPrior(lightning.LightningModule):
             learning_rate: float,
             categorical_prior: bool = False,
             dirichlet_prior: bool = False,
+            dirichlet_process: bool = False,
             wishart_prior: bool = False,
     ):
         super().__init__()
@@ -114,25 +115,29 @@ class VampPrior(lightning.LightningModule):
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
 
-        self.u = nn.Parameter(u)
+        self.u = nn.Parameter(u, requires_grad=True)
         self.k = nn.Parameter(torch.as_tensor(self.u.shape[0]), requires_grad=False)
 
         self.categorical_prior = categorical_prior
         self.dirichlet_prior = dirichlet_prior
+        self.dirichlet_process = dirichlet_process
         self.wishart_prior = wishart_prior
 
         # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
-            softplus_inverse(torch.ones(self.k)),
-            requires_grad=self.dirichlet_prior
+            softplus_inverse(torch.as_tensor(1.0) if self.dirichlet_process else torch.ones(self.k)),
+            requires_grad=self.dirichlet_prior or self.dirichlet_process
+        )
+        self.beta_uc = nn.Parameter(
+            softplus_inverse(torch.as_tensor(1.0)),
+            requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
-        diag_init = softplus_inverse(self.k ** (1 / self.dim_z) / (self.dim_z + 2) ** 0.5)
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * diag_init,
+            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1),
             requires_grad=self.wishart_prior
         )
 
@@ -141,13 +146,24 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def alpha(self):
-        return F.softplus(self.alpha_uc)
+        if self.dirichlet_prior:
+            return F.softplus(self.alpha_uc) / self.k
+        elif self.dirichlet_process:
+            return self.qa().rsample() * torch.ones(self.k).to(self.k.device) / self.k
+        else:
+            raise NotImplementedError
 
     def n_and_V(self):
+        n = dist.transform_to(dist.Wishart.arg_constraints['df'])(self.n_uc)
         n = F.softplus(self.n_uc)
-        L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])  # TODO: vectorize this somehow
-        L += torch.diag_embed(F.softplus(torch.diagonal(self.L_uc, dim1=-1, dim2=-2)) + 1e-5)
-        return n, L @ L.mT
+        V = dist.transform_to(dist.Wishart.arg_constraints['covariance_matrix'])(self.L_uc)
+        V += 1e-5 * torch.eye(self.dim_z).to(V.device)[None]
+        return n, V
+
+        # n = F.softplus(self.n_uc)
+        # L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])  # TODO: vectorize this somehow
+        # L += torch.diag_embed(F.softplus(torch.diagonal(self.L_uc, dim1=-1, dim2=-2)) + 1e-5)
+        # return n, L @ L.mT
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
@@ -169,6 +185,9 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z)
 
+    def qa(self):
+        return dist.InverseGamma(F.softplus(self.alpha_uc), F.softplus(self.beta_uc))
+
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
         if self.dirichlet_prior:
@@ -187,13 +206,19 @@ class VampPrior(lightning.LightningModule):
         return dkl_z.sum()
 
     def dkl_c(self, qc_z: dist.Categorical):
-        if self.dirichlet_prior:
+        if self.dirichlet_prior or self.dirichlet_process:
             alpha = self.alpha()
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
         elif self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
+        else:
+            return 0
+
+    def dkl_alpha(self):
+        if self.dirichlet_process:
+            return dist.kl_divergence(self.qa(), dist.InverseGamma(1, 1))
         else:
             return 0
 
@@ -228,14 +253,16 @@ class VampPrior(lightning.LightningModule):
         z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
+        # with torch.no_grad():
         qc_z = self.qc_z(log_pz_c)
 
         elbo = (
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_pi()
-            - self.dkl_Lambda()
+            - self.dkl_alpha() / 60_000
+            - self.dkl_pi() / 60_000
+            - self.dkl_Lambda() / 60_000
         ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
@@ -274,13 +301,14 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_clusters', type=int, default=100)
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
+    parser.add_argument('--dirichlet_process', action='store_true', default=False)
     parser.add_argument('--wishart_prior', action='store_true', default=False)
 
     args = parser.parse_args()
