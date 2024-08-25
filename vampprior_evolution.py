@@ -96,8 +96,8 @@ class VampPrior(lightning.LightningModule):
             decoder: callable,
             u: torch.Tensor,
             learning_rate: float,
-            learnable_mix: bool = False,
-            prior_variance: Literal['additive', 'coupled', 'decoupled'] = 'additive',
+            prior_mixture: Literal['fixed', 'learnable', 'variational'] = 'fixed',
+            prior_variance: Literal['amortized', 'decoupled'] = 'amortized',
     ):
         super().__init__()
 
@@ -108,14 +108,21 @@ class VampPrior(lightning.LightningModule):
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
 
-        self.learnable_mix = learnable_mix
+        self.prior_mixture = prior_mixture
         self.prior_variance = prior_variance
 
         # trainable prior parameters
         self.u = nn.Parameter(u, requires_grad=True)
-        self.pi_uc = nn.Parameter(torch.ones(self.k), requires_grad=self.learnable_mix)
+        self.alpha_uc = nn.Parameter(
+            utils.softplus_inverse(torch.ones(self.k)),
+            requires_grad=self.prior_mixture == 'variational'
+        )
+        self.pi_uc = nn.Parameter(
+            torch.ones(self.k),
+            requires_grad=self.prior_mixture == 'learnable'
+        )
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1),
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),
             requires_grad=self.prior_variance != 'coupled'
         )
 
@@ -126,7 +133,7 @@ class VampPrior(lightning.LightningModule):
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
         pz_c = self.qz_x(self.u)
-        if self.prior_variance == 'coupled':
+        if self.prior_variance == 'amortized':
             return pz_c.log_prob(z)
         elif self.prior_variance == 'decoupled':
             return dist.MultivariateNormal(pz_c.mean, scale_tril=utils.scale_tril(self.L_uc)).log_prob(z)
@@ -137,8 +144,21 @@ class VampPrior(lightning.LightningModule):
         log_probs = log_pz_c + torch.log_softmax(self.pi_uc, dim=0)
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
-    def dkl_z(self, qz_x, log_pz_c) -> torch.Tensor:
-        return -qz_x.entropy() - torch.logsumexp(log_pz_c + torch.log_softmax(self.pi_uc, dim=0), dim=-1)
+    def qpi(self) -> dist.Dirichlet:
+        return dist.Dirichlet(F.softplus(self.alpha_uc))
+
+    def dkl_z(self, qz_x: dist.Distribution, log_pz_c: torch.Tensor) -> torch.Tensor:
+        if self.prior_mixture == 'variational':
+            log_pi = self.qpi().rsample()
+        else:
+            log_pi = torch.log_softmax(self.pi_uc, dim=0)
+        return -qz_x.entropy() - torch.logsumexp(log_pi + log_pz_c, dim=-1)
+
+    def dkl_pi(self):
+        if self.prior_mixture == 'variational':
+            return dist.kl_divergence(self.qpi(), dist.Dirichlet(torch.ones_like(self.alpha_uc) / self.k))
+        else:
+            return 0
 
     def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, dist.Distribution]):
         qz_x = self.qz_x(x)
@@ -146,7 +166,11 @@ class VampPrior(lightning.LightningModule):
 
         log_pz_c = self.log_pz_c(z)
 
-        elbo = (self.px_z(z).log_prob(x) - self.dkl_z(qz_x, log_pz_c)).mean()
+        elbo = (
+            self.px_z(z).log_prob(x).sum()
+            - self.dkl_z(qz_x, log_pz_c).sum()
+            - self.dkl_pi()
+        ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': self.qc_z(log_pz_c)}
 
@@ -160,7 +184,7 @@ class VampPrior(lightning.LightningModule):
         self.log("val_elbo", elbo, on_epoch=True, prog_bar=True, batch_size=batch['x'].shape[0])
         self.clustering_metrics.update(**{**batch, **variational_family})
 
-    def on_validation_epoch_end(self) -> None:
+    def on_validation_epoch_end(self):
         self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
         self.clustering_metrics.reset()
 
@@ -189,8 +213,8 @@ if __name__ == '__main__':
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
 
-    parser.add_argument('--learnable_mix', action='store_true', default=False)
-    parser.add_argument('--prior_variance', type=str, default='coupled')
+    parser.add_argument('--prior_mixture', type=str, default='fixed')
+    parser.add_argument('--prior_variance', type=str, default='amortized')
 
     args = parser.parse_args()
     assert args.batch_size > args.max_clusters, 'pseudo-inputs initialization makes this assumption'
@@ -226,7 +250,7 @@ if __name__ == '__main__':
         decoder=Decoder,
         u=next(iter(dl_train))['x'][:args.max_clusters],
         learning_rate=args.learning_rate,
-        learnable_mix=args.learnable_mix,
+        prior_mixture=args.prior_mixture,
         prior_variance=args.prior_variance
     )
 
