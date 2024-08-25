@@ -149,7 +149,7 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_z(self, qz_x: dist.Distribution, log_pz_c: torch.Tensor) -> torch.Tensor:
         if self.prior_mixture == 'variational':
-            log_pi = self.qpi().rsample()
+            log_pi = torch.log(self.qpi().rsample())
         else:
             log_pi = torch.log_softmax(self.pi_uc, dim=0)
         return -qz_x.entropy() - torch.logsumexp(log_pi + log_pz_c, dim=-1)
