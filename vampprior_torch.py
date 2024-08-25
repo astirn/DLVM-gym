@@ -190,7 +190,7 @@ class VampPrior(lightning.LightningModule):
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
-        if self.dirichlet_prior:
+        if self.dirichlet_prior or self.dirichlet_process:
             alpha = self.alpha()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.categorical_prior:
@@ -199,7 +199,7 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
         dkl_z = -qz_x.entropy()
-        if self.categorical_prior or self.dirichlet_prior:
+        if self.categorical_prior or self.dirichlet_prior or self.dirichlet_process:
             dkl_z -= (qc_z.probs * log_pz_c).sum(dim=-1)
         else:
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
