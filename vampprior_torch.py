@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
 import torchvision.datasets as datasets
+import utils_torch as utils
 
 from cytoolz import merge_with
 from sklearn.metrics.cluster import normalized_mutual_info_score
@@ -84,14 +85,6 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
 
-def softplus_inverse(x):
-    return x + torch.log(-torch.expm1(-x))
-
-
-def multivariate_digamma(a, p):
-    return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
-
-
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -125,15 +118,15 @@ class VampPrior(lightning.LightningModule):
 
         # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
-            softplus_inverse(torch.as_tensor(1.0) if self.dirichlet_process else torch.ones(self.k)),
+            utils.softplus_inverse(torch.as_tensor(1.0) if self.dirichlet_process else torch.ones(self.k)),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            softplus_inverse(torch.as_tensor(1.0)),
+            utils.softplus_inverse(torch.as_tensor(1.0)),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
-            softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
+            utils.softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
         self.L_uc = nn.Parameter(
@@ -154,16 +147,9 @@ class VampPrior(lightning.LightningModule):
             raise NotImplementedError
 
     def n_and_V(self):
-        n = dist.transform_to(dist.Wishart.arg_constraints['df'])(self.n_uc)
         n = F.softplus(self.n_uc)
-        V = dist.transform_to(dist.Wishart.arg_constraints['covariance_matrix'])(self.L_uc)
-        V += 1e-5 * torch.eye(self.dim_z).to(V.device)[None]
-        return n, V
-
-        # n = F.softplus(self.n_uc)
-        # L = torch.stack([torch.tril(self.L_uc[i], diagonal=-1) for i in range(self.k)])  # TODO: vectorize this somehow
-        # L += torch.diag_embed(F.softplus(torch.diagonal(self.L_uc, dim1=-1, dim2=-2)) + 1e-5)
-        # return n, L @ L.mT
+        L = utils.scale_tril(self.L_uc)
+        return n, L @ L.mT
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
@@ -171,7 +157,7 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior:
             n, V = self.n_and_V()
             log_det = (
-                    multivariate_digamma(n / 2, self.dim_z) +
+                    utils.multivariate_digamma(n / 2, self.dim_z) +
                     self.dim_z * torch.log(torch.as_tensor(2)) +
                     torch.linalg.slogdet(V)[1]
             )
@@ -242,7 +228,7 @@ class VampPrior(lightning.LightningModule):
                     + n_q * (torch.einsum('bii->b', V_p_inv_V_q) - self.dim_z)
                     + 2 * torch.mvlgamma(n_p / 2, self.dim_z)
                     - 2 * torch.mvlgamma(n_q / 2, self.dim_z)
-                    + (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z)
+                    + (n_q - n_p) * utils.multivariate_digamma(n_q / 2, self.dim_z)
             ) / 2
             return dkl_Lambda.sum()
         else:
