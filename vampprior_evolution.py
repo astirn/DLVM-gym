@@ -115,15 +115,15 @@ class VampPrior(lightning.LightningModule):
         self.u = nn.Parameter(u, requires_grad=True)
         self.alpha_uc = nn.Parameter(
             utils.softplus_inverse(torch.ones(self.k)),
-            requires_grad=self.prior_mixture == 'variational'
+            requires_grad=self.prior_mixture == 'variational',
         )
         self.pi_uc = nn.Parameter(
             torch.ones(self.k),
-            requires_grad=self.prior_mixture == 'learnable'
+            requires_grad=self.prior_mixture == 'learnable',
         )
         self.L_uc = nn.Parameter(
             torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),
-            requires_grad=self.prior_variance != 'coupled'
+            requires_grad=self.prior_variance == 'decoupled',
         )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
@@ -152,7 +152,8 @@ class VampPrior(lightning.LightningModule):
             log_pi = torch.log(self.qpi().rsample())
         else:
             log_pi = torch.log_softmax(self.pi_uc, dim=0)
-        return -qz_x.entropy() - torch.logsumexp(log_pi + log_pz_c, dim=-1)
+        dkl_z = -qz_x.entropy() - torch.logsumexp(log_pi + log_pz_c, dim=-1)
+        return dkl_z.sum()
 
     def dkl_pi(self):
         if self.prior_mixture == 'variational':
@@ -168,7 +169,7 @@ class VampPrior(lightning.LightningModule):
 
         elbo = (
             self.px_z(z).log_prob(x).sum()
-            - self.dkl_z(qz_x, log_pz_c).sum()
+            - self.dkl_z(qz_x, log_pz_c)
             - self.dkl_pi()
         ) / x.shape[0]
 
