@@ -147,7 +147,7 @@ class VampPrior(lightning.LightningModule):
 
     def alpha(self):
         if self.dirichlet_prior:
-            return F.softplus(self.alpha_uc) / self.k
+            return F.softplus(self.alpha_uc)# / self.k
         elif self.dirichlet_process:
             return self.qa().rsample() * torch.ones(self.k).to(self.k.device) / self.k
         else:
@@ -253,7 +253,6 @@ class VampPrior(lightning.LightningModule):
         z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
-        # with torch.no_grad():
         qc_z = self.qc_z(log_pz_c)
 
         elbo = (
