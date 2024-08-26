@@ -140,7 +140,7 @@ class VampPrior(lightning.LightningModule):
 
     def alpha(self):
         if self.dirichlet_prior:
-            return F.softplus(self.alpha_uc)# / self.k
+            return F.softplus(self.alpha_uc)
         elif self.dirichlet_process:
             return self.qa().rsample() * torch.ones(self.k).to(self.k.device) / self.k
         else:
