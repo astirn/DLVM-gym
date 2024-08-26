@@ -245,10 +245,10 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_alpha() / 60_000
-            - self.dkl_pi() / 60_000
             - self.dkl_Lambda() / 60_000
-        ) / x.shape[0]
+            - self.dkl_pi() / 60_000
+            - self.dkl_alpha() / 60_000
+       ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
