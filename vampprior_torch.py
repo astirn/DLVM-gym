@@ -92,6 +92,7 @@ class VampPrior(lightning.LightningModule):
             dim_x: int,
             dim_z: int,
             num_data: int,
+            num_clusters: int,
             encoder: callable,
             decoder: callable,
             u: torch.Tensor,
@@ -106,6 +107,7 @@ class VampPrior(lightning.LightningModule):
         self.dim_x = dim_x
         self.dim_z = dim_z
         self.num_data = num_data
+        self.num_clusters = num_clusters
 
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
@@ -222,8 +224,14 @@ class VampPrior(lightning.LightningModule):
     def dkl_Lambda(self):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
-            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
+
+            # VMM prior
+            # n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
+            # V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
+
+            # very aggressive and gets close to num_clusters everytime, but accuracy can nosedive
+            # n_p = torch.as_tensor(self.num_data / self.num_clusters).to(n_q.device)
+            # V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.num_clusters  ** (2 / self.dim_z) * n_p
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -329,6 +337,7 @@ if __name__ == '__main__':
         dim_x=data_dim,
         dim_z=args.latent_dim,
         num_data=len(ds_train),
+        num_clusters=15,
         encoder=Encoder,
         decoder=Decoder,
         u=next(iter(dl_train))['x'][:args.max_clusters],
