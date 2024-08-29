@@ -91,6 +91,7 @@ class VampPrior(lightning.LightningModule):
             self,
             dim_x: int,
             dim_z: int,
+            num_data: int,
             encoder: callable,
             decoder: callable,
             u: torch.Tensor,
@@ -104,6 +105,7 @@ class VampPrior(lightning.LightningModule):
 
         self.dim_x = dim_x
         self.dim_z = dim_z
+        self.num_data = num_data
 
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
@@ -245,9 +247,9 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_Lambda() / 60_000
-            - self.dkl_pi() / 60_000
-            - self.dkl_alpha() / 60_000
+            - self.dkl_Lambda(z) / self.num_data
+            - self.dkl_pi() / self.num_data
+            - self.dkl_alpha() / self.num_data
        ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
@@ -326,6 +328,7 @@ if __name__ == '__main__':
     model = VampPrior(
         dim_x=data_dim,
         dim_z=args.latent_dim,
+        num_data=len(ds_train),
         encoder=Encoder,
         decoder=Decoder,
         u=next(iter(dl_train))['x'][:args.max_clusters],
