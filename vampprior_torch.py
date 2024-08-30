@@ -122,11 +122,11 @@ class VampPrior(lightning.LightningModule):
 
         # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
-            utils.softplus_inverse(torch.as_tensor(1.0) if self.dirichlet_process else torch.ones(self.k)),
+            utils.softplus_inverse(torch.ones(self.k)),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            utils.softplus_inverse(torch.as_tensor(1.0)),
+            utils.softplus_inverse(torch.ones(self.k)),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
@@ -142,13 +142,8 @@ class VampPrior(lightning.LightningModule):
 
         self.learning_rate = learning_rate
 
-    def alpha(self):
-        if self.dirichlet_prior:
-            return F.softplus(self.alpha_uc)
-        elif self.dirichlet_process:
-            return self.qa().rsample() * torch.ones(self.k).to(self.k.device) / self.k
-        else:
-            raise NotImplementedError
+    def alpha_and_beta(self):
+        return F.softplus(self.alpha_uc), F.softplus(self.beta_uc)
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
@@ -175,16 +170,19 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z)
 
-    def qa(self):
-        return dist.InverseGamma(F.softplus(self.alpha_uc), F.softplus(self.beta_uc))
-
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
-        if self.dirichlet_prior or self.dirichlet_process:
-            alpha = self.alpha()
-            log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
-        elif self.categorical_prior:
+        if self.categorical_prior:
             log_probs -= torch.log(self.k)
+        elif self.dirichlet_prior:
+            alpha, _ = self.alpha_and_beta()
+            log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
+        elif self.dirichlet_process:
+            alpha, beta = self.alpha_and_beta()
+            log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
+            log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
+            log_probs += log_pv + torch.cumsum(log_pvm1, dim=0)
+
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
     def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
@@ -196,42 +194,55 @@ class VampPrior(lightning.LightningModule):
         return dkl_z.sum()
 
     def dkl_c(self, qc_z: dist.Categorical):
-        if self.dirichlet_prior or self.dirichlet_process:
-            alpha = self.alpha()
-            dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
-            return dkl_c.sum()
-        elif self.categorical_prior:
+        if self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
-        else:
-            return 0
-
-    def dkl_alpha(self):
-        if self.dirichlet_process:
-            return dist.kl_divergence(self.qa(), dist.InverseGamma(1, 1))
+        elif self.dirichlet_prior:
+            alpha, _ = self.alpha_and_beta()
+            dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
+            return dkl_c.sum()
+        elif self.dirichlet_process:
+            alpha, beta = self.alpha_and_beta()
+            log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
+            log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
+            dkl_c = -qc_z.entropy() + (qc_z.probs * log_pv).sum(dim=1) + (qc_z.probs[:, 1:] * log_pvm1[1:]).sum(dim=1)
+            return dkl_c.sum()
         else:
             return 0
 
     def dkl_pi(self):
         if self.dirichlet_prior:
-            alpha = self.alpha()
+            alpha, _ = self.alpha_and_beta()
             qpi = dist.Dirichlet(alpha)
             ppi = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(qpi, ppi)
         else:
             return 0
 
-    def dkl_Lambda(self):
+    def dkl_v(self):
+        if self.dirichlet_process:
+            alpha, beta = self.alpha_and_beta()
+            qpi = dist.Beta(alpha, beta)
+            ppi = dist.Beta(1, 1 / self.k)
+            return dist.kl_divergence(qpi, ppi).sum()
+
+    def dkl_Lambda(self, qc_z, z):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
 
             # VMM prior
-            # n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            # V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
+            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
 
             # very aggressive and gets close to num_clusters everytime, but accuracy can nosedive
             # n_p = torch.as_tensor(self.num_data / self.num_clusters).to(n_q.device)
-            # V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.num_clusters  ** (2 / self.dim_z) * n_p
+            # V_p_inv = n_p * torch.eye(self.dim_z).to(V_q.device) / self.num_clusters  ** (2 / self.dim_z)
+
+            # pi = dist.Dirichlet(self.alpha()).rsample()
+            # n_p = self.dim_z + self.num_data * pi
+            # # V_p_inv = torch.eye(self.dim_z).to(V_q.device)
+            # V_p_inv = n_p[:, None, None] * torch.eye(self.dim_z).to(V_q.device) / self.num_clusters  ** (2 / self.dim_z)
+
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -255,9 +266,8 @@ class VampPrior(lightning.LightningModule):
             self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_Lambda(z) / self.num_data
+            - self.dkl_Lambda(qc_z, z) / self.num_data
             - self.dkl_pi() / self.num_data
-            - self.dkl_alpha() / self.num_data
        ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
@@ -344,6 +354,7 @@ if __name__ == '__main__':
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
         dirichlet_prior=args.dirichlet_prior,
+        dirichlet_process=args.dirichlet_process,
         wishart_prior=args.wishart_prior,
     )
 
