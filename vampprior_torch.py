@@ -102,6 +102,7 @@ class VampPrior(lightning.LightningModule):
             dirichlet_process: bool = False,
             wishart_prior: bool = False,
     ):
+        assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
 
         self.dim_x = dim_x
@@ -263,12 +264,12 @@ class VampPrior(lightning.LightningModule):
         qc_z = self.qc_z(log_pz_c)
 
         elbo = (
-            self.px_z(z).log_prob(x).sum()
+            + self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)
-            - self.dkl_Lambda(qc_z, z) / self.num_data
             - self.dkl_pi() / self.num_data
-       ) / x.shape[0]
+            - self.dkl_Lambda(qc_z, z) / self.num_data
+        ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
