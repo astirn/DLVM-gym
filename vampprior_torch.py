@@ -182,7 +182,7 @@ class VampPrior(lightning.LightningModule):
             alpha, beta = self.alpha_and_beta()
             log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
             log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
-            log_probs += log_pv + torch.cumsum(log_pvm1, dim=0)
+            log_probs += log_pv + torch.concat([torch.zeros_like(log_pvm1)[:1], torch.cumsum(log_pvm1, dim=0)[:-1]])
 
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
