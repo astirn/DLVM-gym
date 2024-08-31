@@ -209,8 +209,8 @@ class VampPrior(lightning.LightningModule):
             alpha, beta = self.alpha_and_beta()
             log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
             log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
-            qc_gti_z = torch.cumsum(qc_z.probs, dim=1) - qc_z.probs
-            dkl_c = -qc_z.entropy() - (qc_z.probs * log_pv + qc_gti_z * log_pvm1).sum(dim=1)
+            qc_gtj_z = torch.cumsum(qc_z.probs, dim=1) - qc_z.probs
+            dkl_c = -qc_z.entropy() - (qc_z.probs * log_pv + qc_gtj_z * log_pvm1).sum(dim=1)
             return dkl_c.sum()
         else:
             return 0
@@ -263,11 +263,11 @@ class VampPrior(lightning.LightningModule):
         elbo = (
             + self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
-            - self.dkl_c(qc_z)
-            - self.dkl_pi() / self.num_data
-            - self.dkl_v() / self.num_data
-            - self.dkl_alpha0() / self.num_data
-            - self.dkl_Lambda(qc_z, z) / self.num_data
+            - self.dkl_c(qc_z)  # zero only for original VampPrior
+            - self.dkl_pi() / self.num_data  # zero unless Dirichlet prior
+            - self.dkl_v() / self.num_data  # zero unless Dirichlet process
+            - self.dkl_alpha0() / self.num_data  # zero unless Dirichlet process
+            - self.dkl_Lambda(qc_z, z) / self.num_data  # zero unless Wishart prior
         ) / x.shape[0]
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
