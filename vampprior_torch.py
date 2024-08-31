@@ -92,7 +92,6 @@ class VampPrior(lightning.LightningModule):
             dim_x: int,
             dim_z: int,
             num_data: int,
-            num_clusters: int,
             encoder: callable,
             decoder: callable,
             u: torch.Tensor,
@@ -108,7 +107,6 @@ class VampPrior(lightning.LightningModule):
         self.dim_x = dim_x
         self.dim_z = dim_z
         self.num_data = num_data
-        self.num_clusters = num_clusters
 
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
@@ -123,11 +121,11 @@ class VampPrior(lightning.LightningModule):
 
         # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k)),
+            utils.softplus_inverse(torch.ones(self.k + 1)),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k)),
+            utils.softplus_inverse(torch.ones(self.k + 1)),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
@@ -143,8 +141,11 @@ class VampPrior(lightning.LightningModule):
 
         self.learning_rate = learning_rate
 
+    def a_and_b(self):
+        return F.softplus(self.alpha_uc[0]), F.softplus(self.beta_uc[0])
+
     def alpha_and_beta(self):
-        return F.softplus(self.alpha_uc), F.softplus(self.beta_uc)
+        return F.softplus(self.alpha_uc[1:]), F.softplus(self.beta_uc[1:])
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
@@ -223,10 +224,15 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_v(self):
         if self.dirichlet_process:
-            alpha, beta = self.alpha_and_beta()
-            qpi = dist.Beta(alpha, beta)
-            ppi = dist.Beta(1, 1 / self.k)
-            return dist.kl_divergence(qpi, ppi).sum()
+            q = dist.Beta(*self.alpha_and_beta())
+            p = dist.Beta(1, dist.InverseGamma(*self.a_and_b()).rsample() / self.k)
+            return dist.kl_divergence(q, p).sum()
+
+    def dkl_alpha0(self):
+        if self.dirichlet_process:
+            return dist.kl_divergence(dist.InverseGamma(*self.a_and_b()), dist.InverseGamma(1, 1))
+        else:
+            return 0
 
     def dkl_Lambda(self, qc_z, z):
         if self.wishart_prior:
@@ -351,7 +357,6 @@ if __name__ == '__main__':
         dim_x=data_dim,
         dim_z=args.latent_dim,
         num_data=len(ds_train),
-        num_clusters=15,
         encoder=Encoder,
         decoder=Decoder,
         u=next(iter(dl_train))['x'][:args.max_clusters],
