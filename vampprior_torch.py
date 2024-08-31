@@ -94,8 +94,9 @@ class VampPrior(lightning.LightningModule):
             num_data: int,
             encoder: callable,
             decoder: callable,
-            u: torch.Tensor,
             learning_rate: float,
+            truncation_level: int = 0,
+            u_constraint: callable = None,
             categorical_prior: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
@@ -111,8 +112,9 @@ class VampPrior(lightning.LightningModule):
         self.qz_x = encoder(self.dim_x, self.dim_z)
         self.px_z = decoder(self.dim_x, self.dim_z)
 
-        self.u = nn.Parameter(u, requires_grad=True)
-        self.k = nn.Parameter(torch.as_tensor(self.u.shape[0]), requires_grad=False)
+        self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
+        self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
+        self.u_uc = nn.Parameter(torch.randn([self.k, self.dim_x]), requires_grad=True)
 
         self.categorical_prior = categorical_prior
         self.dirichlet_prior = dirichlet_prior
@@ -154,7 +156,7 @@ class VampPrior(lightning.LightningModule):
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
-        pz_c = self.qz_x(self.u)
+        pz_c = self.qz_x(self.u_constraint(self.u_uc))
         if self.wishart_prior:
             n, V = self.n_and_V()
             log_det = (
@@ -317,9 +319,9 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
     parser.add_argument('--learning_rate', type=float, default=5e-4)
-    parser.add_argument('--max_clusters', type=int, default=100)
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--truncation_level', type=int, default=100)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
@@ -327,7 +329,6 @@ if __name__ == '__main__':
     parser.add_argument('--wishart_prior', action='store_true', default=False)
 
     args = parser.parse_args()
-    assert args.batch_size > args.max_clusters, 'pseudo-inputs initialization makes this assumption'
 
     # random seed
     if args.seed is not None:
@@ -359,7 +360,8 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder,
         decoder=Decoder,
-        u=next(iter(dl_train))['x'][:args.max_clusters],
+        u_constraint=F.tanh,
+        truncation_level=args.truncation_level,
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
         dirichlet_prior=args.dirichlet_prior,
