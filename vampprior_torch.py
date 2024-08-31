@@ -218,9 +218,9 @@ class VampPrior(lightning.LightningModule):
     def dkl_pi(self):
         if self.dirichlet_prior:
             alpha, _ = self.alpha_and_beta()
-            qpi = dist.Dirichlet(alpha)
-            ppi = dist.Dirichlet(torch.ones_like(alpha) / self.k)
-            return dist.kl_divergence(qpi, ppi)
+            q = dist.Dirichlet(alpha)
+            p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
+            return dist.kl_divergence(q, p)
         else:
             return 0
 
