@@ -189,6 +189,9 @@ class VampPrior(lightning.LightningModule):
 
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
 
+    def qalpha0(self):
+        return dist.InverseGamma(*self.a_and_b())
+
     def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
         dkl_z = -qz_x.entropy()
         if self.categorical_prior or self.dirichlet_prior or self.dirichlet_process:
@@ -227,12 +230,14 @@ class VampPrior(lightning.LightningModule):
     def dkl_v(self):
         if self.dirichlet_process:
             q = dist.Beta(*self.alpha_and_beta())
-            p = dist.Beta(1, dist.InverseGamma(*self.a_and_b()).rsample() / self.k)
-            return dist.kl_divergence(q, p).sum()
+            p = dist.Beta(1, self.qalpha0().rsample(torch.Size([50, 1])))
+            return dist.kl_divergence(q, p).mean(dim=0).sum()
+        else:
+            return 0
 
     def dkl_alpha0(self):
         if self.dirichlet_process:
-            return dist.kl_divergence(dist.InverseGamma(*self.a_and_b()), dist.InverseGamma(1, 1))
+            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(0.5, 1.5))
         else:
             return 0
 
@@ -309,7 +314,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
+    parser.add_argument('--learning_rate', type=float, default=2e-4)
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
