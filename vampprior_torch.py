@@ -95,7 +95,7 @@ class VampPrior(lightning.LightningModule):
             encoder: callable,
             decoder: callable,
             learning_rate: float,
-            truncation_level: int = 0,
+            truncation_level: int,
             u_constraint: callable = None,
             categorical_prior: bool = False,
             dirichlet_prior: bool = False,
@@ -260,15 +260,18 @@ class VampPrior(lightning.LightningModule):
         log_pz_c = self.log_pz_c(z)
         qc_z = self.qc_z(log_pz_c)
 
-        elbo = (
+        elbo_locals = (
             + self.px_z(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)  # zero only for original VampPrior
-            - self.dkl_pi() / self.num_data  # zero unless Dirichlet prior
-            - self.dkl_v() / self.num_data  # zero unless Dirichlet process
-            - self.dkl_alpha0() / self.num_data  # zero unless Dirichlet process
-            - self.dkl_Lambda(qc_z, z) / self.num_data  # zero unless Wishart prior
         ) / x.shape[0]
+        elbo_globals = (
+            - self.dkl_pi()  # zero unless Dirichlet prior
+            - self.dkl_v()  # zero unless Dirichlet process
+            - self.dkl_alpha0()  # zero unless Dirichlet process
+            - self.dkl_Lambda(qc_z, z)  # zero unless Wishart prior
+        ) / self.num_data
+        elbo = elbo_locals + elbo_globals
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
