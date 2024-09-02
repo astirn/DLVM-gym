@@ -100,9 +100,11 @@ class VampPrior(lightning.LightningModule):
             categorical_prior: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
+            inverse_gamma_prior: bool = False,
             wishart_prior: bool = False,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
+        assert not inverse_gamma_prior or not dirichlet_prior or not dirichlet_process
         super().__init__()
 
         self.dim_x = dim_x
@@ -119,15 +121,24 @@ class VampPrior(lightning.LightningModule):
         self.categorical_prior = categorical_prior
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
+        self.inverse_gamma_prior = inverse_gamma_prior
         self.wishart_prior = wishart_prior
 
         # global variational parameters (unconstrained)
+        self.a_uc = nn.Parameter(
+            utils.softplus_inverse(torch.ones(1)),
+            requires_grad=self.inverse_gamma_prior
+        )
+        self.b_uc = nn.Parameter(
+            utils.softplus_inverse(torch.ones(1)),
+            requires_grad=self.inverse_gamma_prior
+        )
         self.alpha_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k + 1)),
+            utils.softplus_inverse(torch.ones(self.k)),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k + 1)),
+            utils.softplus_inverse(torch.ones(self.k) * 5),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
@@ -144,10 +155,10 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def a_and_b(self):
-        return F.softplus(self.alpha_uc[0]), F.softplus(self.beta_uc[0])
+        return F.softplus(self.a_uc), F.softplus(self.b_uc)
 
     def alpha_and_beta(self):
-        return F.softplus(self.alpha_uc[1:]), F.softplus(self.beta_uc[1:])
+        return F.softplus(self.alpha_uc), F.softplus(self.beta_uc)
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
@@ -224,25 +235,31 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_pi(self):
-        if self.dirichlet_prior:
-            alpha, _ = self.alpha_and_beta()
-            q = dist.Dirichlet(alpha)
+        alpha, _ = self.alpha_and_beta()
+        q = dist.Dirichlet(alpha)
+        if self.dirichlet_prior and self.inverse_gamma_prior:
+            p = dist.Dirichlet(torch.ones_like(alpha) * self.qalpha0().rsample(torch.Size([50, 1])) / self.k)
+            return dist.kl_divergence(q, p).mean(dim=0)[:-1].sum()
+        elif self.dirichlet_prior:
             p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(q, p)
         else:
             return 0
 
     def dkl_v(self):
-        if self.dirichlet_process:
-            q = dist.Beta(*self.alpha_and_beta())
+        q = dist.Beta(*self.alpha_and_beta())
+        if self.dirichlet_process and self.inverse_gamma_prior:
             p = dist.Beta(1, self.qalpha0().rsample(torch.Size([50, 1])))
-            return dist.kl_divergence(q, p).mean(dim=0).sum()
+            return dist.kl_divergence(q, p).mean(dim=0)[:-1].sum()
+        elif self.dirichlet_process:
+            return dist.kl_divergence(q, dist.Beta(1, 1))[:-1].sum()
+
         else:
             return 0
 
     def dkl_alpha0(self):
-        if self.dirichlet_process:
-            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(0.5, 1.5))
+        if self.inverse_gamma_prior:
+            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 5))
         else:
             return 0
 
@@ -327,6 +344,7 @@ if __name__ == '__main__':
     parser.add_argument('--categorical_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_process', action='store_true', default=False)
+    parser.add_argument('--inverse_gamma_prior', action='store_true', default=False)
     parser.add_argument('--wishart_prior', action='store_true', default=False)
 
     args = parser.parse_args()
@@ -367,6 +385,7 @@ if __name__ == '__main__':
         categorical_prior=args.categorical_prior,
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
+        inverse_gamma_prior=args.inverse_gamma_prior,
         wishart_prior=args.wishart_prior,
     )
 
