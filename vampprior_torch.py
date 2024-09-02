@@ -174,6 +174,14 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z)
 
+    def log_pv(self) -> (torch.Tensor, torch.Tensor):
+        alpha, beta = self.alpha_and_beta()
+        log_pv = (torch.digamma(alpha) - torch.digamma(alpha + beta))[:-1]
+        log_pv = torch.concat([log_pv, torch.as_tensor([0]).to(log_pv.device)])
+        log_pvm1 = (torch.digamma(beta) - torch.digamma(alpha + beta))[:-1]
+        log_pvm1 = torch.concat([log_pvm1, torch.as_tensor([-torch.inf]).to(log_pvm1.device)])
+        return log_pv, log_pvm1
+
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
         if self.categorical_prior:
