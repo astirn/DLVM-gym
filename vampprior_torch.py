@@ -182,9 +182,7 @@ class VampPrior(lightning.LightningModule):
             alpha, _ = self.alpha_and_beta()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.dirichlet_process:
-            alpha, beta = self.alpha_and_beta()
-            log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
-            log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
+            log_pv, log_pvm1 = self.log_pv()
             log_probs += log_pv + torch.concat([torch.zeros_like(log_pvm1)[:1], torch.cumsum(log_pvm1, dim=0)[:-1]])
 
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
@@ -209,11 +207,10 @@ class VampPrior(lightning.LightningModule):
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
         elif self.dirichlet_process:
-            alpha, beta = self.alpha_and_beta()
-            log_pv = torch.digamma(alpha) - torch.digamma(alpha + beta)
-            log_pvm1 = torch.digamma(beta) - torch.digamma(alpha + beta)
-            qc_gtj_z = torch.cumsum(qc_z.probs, dim=1) - qc_z.probs
-            dkl_c = -qc_z.entropy() - (qc_z.probs * log_pv + qc_gtj_z * log_pvm1).sum(dim=1)
+            log_pv, log_pvm1 = self.log_pv()
+            qc_gtj_z = torch.fliplr(torch.cumsum(torch.fliplr(qc_z.probs), dim=1)[:, :-1])
+            qc_gtj_z = torch.concat([qc_gtj_z, torch.zeros_like(qc_gtj_z)[:, :1]], dim=1)
+            dkl_c = -qc_z.entropy() - (qc_z.probs * log_pv).sum(dim=1) + (qc_gtj_z[:, :-1] * log_pvm1[:-1]).sum(dim=1)
             return dkl_c.sum()
         else:
             return 0
