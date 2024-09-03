@@ -263,7 +263,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, qc_z, z):
+    def dkl_Lambda(self):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
@@ -295,8 +295,8 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_alpha0()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qc_z, z)  # zero unless Wishart prior
+            - self.dkl_alpha0()  # zero unless Inverse Gamma prior
+            - self.dkl_Lambda()  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
