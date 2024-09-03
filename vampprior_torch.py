@@ -239,7 +239,7 @@ class VampPrior(lightning.LightningModule):
         q = dist.Dirichlet(alpha)
         if self.dirichlet_prior and self.inverse_gamma_prior:
             p = dist.Dirichlet(torch.ones_like(alpha) * self.qalpha0().rsample(torch.Size([50, 1])) / self.k)
-            return dist.kl_divergence(q, p).mean(dim=0)[:-1].sum()
+            return dist.kl_divergence(q, p).mean()
         elif self.dirichlet_prior:
             p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(q, p)
@@ -258,8 +258,10 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_alpha0(self):
-        if self.inverse_gamma_prior:
-            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 5))
+        if self.dirichlet_prior and self.inverse_gamma_prior:
+            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 1))
+        elif self.dirichlet_process and self.inverse_gamma_prior:
+            raise NotImplementedError
         else:
             return 0
 
