@@ -138,11 +138,11 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.inverse_gamma_prior
         )
         self.alpha_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k)),
+            utils.softplus_inverse(torch.ones(self.k) * 2),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k) * 5),
+            utils.softplus_inverse(torch.ones(self.k) * self.k),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
@@ -242,8 +242,10 @@ class VampPrior(lightning.LightningModule):
         alpha, _ = self.alpha_and_beta()
         q = dist.Dirichlet(alpha)
         if self.dirichlet_prior and self.inverse_gamma_prior:
-            p = dist.Dirichlet(torch.ones_like(alpha) * self.qalpha0().rsample(torch.Size([50, 1])) / self.k)
-            return dist.kl_divergence(q, p).mean()
+            alpha0 = self.qalpha0().rsample()  # TODO: anything more than a single MC sample loses gradients
+            p = dist.Dirichlet(alpha0 * torch.ones_like(alpha) / self.k)
+            return dist.kl_divergence(q, p)
+
         elif self.dirichlet_prior:
             p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(q, p)
@@ -253,11 +255,10 @@ class VampPrior(lightning.LightningModule):
     def dkl_v(self):
         q = dist.Beta(*self.alpha_and_beta())
         if self.dirichlet_process and self.inverse_gamma_prior:
-            p = dist.Beta(1, self.qalpha0().rsample(torch.Size([50, 1])))
-            return dist.kl_divergence(q, p).mean(dim=0)[:-1].sum()
+            alpha0 = self.qalpha0().rsample()  # TODO: anything more than a single MC sample loses gradients
+            return dist.kl_divergence(q, dist.Beta(1, alpha0))[:-1].sum()
         elif self.dirichlet_process:
             return dist.kl_divergence(q, dist.Beta(1, 1))[:-1].sum()
-
         else:
             return 0
 
@@ -265,7 +266,7 @@ class VampPrior(lightning.LightningModule):
         if self.dirichlet_prior and self.inverse_gamma_prior:
             return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 1))
         elif self.dirichlet_process and self.inverse_gamma_prior:
-            raise NotImplementedError
+            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 30))
         else:
             return 0
 
@@ -342,7 +343,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=2e-4)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
@@ -385,6 +386,7 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder,
         decoder=Decoder,
+        # u_initial=next(iter(dl_train))['x'][:args.truncation_level],
         u_constraint=F.tanh,
         truncation_level=args.truncation_level,
         learning_rate=args.learning_rate,
@@ -402,5 +404,6 @@ if __name__ == '__main__':
         enable_checkpointing=False,
         logger=False,
         max_epochs=args.max_epochs,
+        num_sanity_val_steps=0,
     )
     trainer.fit(model, dl_train, dl_test)
