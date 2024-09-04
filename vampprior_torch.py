@@ -189,7 +189,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z)
 
-    def log_v(self) -> (torch.Tensor, torch.Tensor):
+    def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
         alpha, beta = self.alpha_and_beta()
         log_v = (torch.digamma(alpha) - torch.digamma(alpha + beta))[:-1]
         log_v = torch.concat([log_v, torch.as_tensor([0]).to(log_v.device)])
@@ -205,7 +205,7 @@ class VampPrior(lightning.LightningModule):
             alpha, _ = self.alpha_and_beta()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.dirichlet_process:
-            log_v, log_vm1 = self.log_v()
+            log_v, log_vm1 = self.log_v_and_log_vm1()
             log_probs += log_v + torch.concat([torch.zeros_like(log_vm1)[:1], torch.cumsum(log_vm1, dim=0)[:-1]])
 
         return dist.Categorical(probs=F.softmax(log_probs, dim=1))
@@ -230,7 +230,7 @@ class VampPrior(lightning.LightningModule):
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
         elif self.dirichlet_process:
-            log_v, log_vm1 = self.log_v()
+            log_v, log_vm1 = self.log_v_and_log_vm1()
             qc_gtj_z = torch.fliplr(torch.cumsum(torch.fliplr(qc_z.probs), dim=1)[:, :-1])
             qc_gtj_z = torch.concat([qc_gtj_z, torch.zeros_like(qc_gtj_z)[:, :1]], dim=1)
             dkl_c = -qc_z.entropy() - (qc_z.probs * log_v).sum(dim=1) - (qc_gtj_z[:, :-1] * log_vm1[:-1]).sum(dim=1)
