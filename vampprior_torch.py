@@ -37,7 +37,7 @@ class ClusteringMetrics(torchmetrics.Metric):
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {
-            'clusters': (self.assignments > 0).sum(),
+            'clusters': (self.assignments > 0).sum().to(torch.float32),
             'acc': self.accuracy / self.num_samples,
             'nmi': self.nmi / self.num_batches,
         }
@@ -398,6 +398,7 @@ if __name__ == '__main__':
     )
 
     # train model
+    torch.set_float32_matmul_precision('high')
     trainer = lightning.Trainer(
         callbacks=[callbacks.EarlyStopping(monitor='val_elbo', patience=20, mode='max')],
         devices=1,
