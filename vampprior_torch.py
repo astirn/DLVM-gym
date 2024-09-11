@@ -99,13 +99,12 @@ class VampPrior(lightning.LightningModule):
             u_initial: torch.Tensor = None,
             u_constraint: callable = None,
             categorical_prior: bool = False,
+            decoupled_variance: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
-            inverse_gamma_prior: bool = False,
             wishart_prior: bool = False,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
-        assert not inverse_gamma_prior or not dirichlet_prior or not dirichlet_process
         super().__init__()
 
         self.dim_x = dim_x
@@ -123,61 +122,50 @@ class VampPrior(lightning.LightningModule):
         )
 
         self.categorical_prior = categorical_prior
+        self.decoupled_variance = decoupled_variance
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
-        self.inverse_gamma_prior = inverse_gamma_prior
         self.wishart_prior = wishart_prior
 
         # global variational parameters (unconstrained)
-        self.a_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(1)),
-            requires_grad=self.inverse_gamma_prior
-        )
-        self.b_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(1)),
-            requires_grad=self.inverse_gamma_prior
-        )
         self.alpha_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k) * 2),
+            torch.log(torch.ones(self.k) * 2),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
         self.beta_uc = nn.Parameter(
-            utils.softplus_inverse(torch.ones(self.k) * self.k),
+            torch.log(torch.arange(int(self.k), 0, -1)),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
-            utils.softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
+            torch.log(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(self.k, 1, 1),
-            requires_grad=self.wishart_prior
+            torch.zeros([self.k, self.dim_z, self.dim_z]) - self.n_uc[:, None].repeat([1, self.dim_z]).diag_embed() / 2,
+            requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
+        self.kl_warmup = 5_000
         self.learning_rate = learning_rate
 
-    def a_and_b(self):
-        return F.softplus(self.a_uc), F.softplus(self.b_uc)
-
     def alpha_and_beta(self):
-        return F.softplus(self.alpha_uc), F.softplus(self.beta_uc)
+        return self.alpha_uc.exp(), self.beta_uc.exp()
 
     def n_and_V(self):
-        n = F.softplus(self.n_uc)
-        L = utils.scale_tril(self.L_uc)
-        return n, L @ L.mT
+        L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp()).diag_embed()
+        return self.n_uc.exp(), L @ L.mT
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
         pz_c = self.qz_x(self.u_constraint(self.u_uc))
-        if self.wishart_prior:
+        if self.wishart_prior and self.kl_warmup == 0:
             n, V = self.n_and_V()
             log_det = (
                     utils.multivariate_digamma(n / 2, self.dim_z) +
                     self.dim_z * torch.log(torch.as_tensor(2)) +
-                    torch.linalg.slogdet(V)[1]
+                    torch.linalg.slogdet(V).logabsdet
             )
             residuals = z - pz_c.mean
             quadratic = torch.squeeze(
@@ -185,8 +173,15 @@ class VampPrior(lightning.LightningModule):
                 @ (n[:, None, None] * V) @
                 torch.unsqueeze(residuals, dim=3)
             )
-            return 0.5 * (-self.dim_z * torch.log(torch.as_tensor(2 * torch.pi)) + log_det - quadratic)
+            return -0.5 * (self.dim_z * torch.log(torch.as_tensor(2 * torch.pi)) - log_det + quadratic)
+        elif self.decoupled_variance and self.kl_warmup == 0:
+            return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
+            if self.kl_warmup == 1:
+                L = torch.linalg.cholesky(pz_c.precision_matrix)
+                self.L_uc.data =  L.tril(-1) + (L.diagonal(dim1=-2, dim2=-1).log()).diag_embed()
+                if self.wishart_prior:
+                    self.L_uc.data -= self.n_uc[:, None].repeat([1, self.dim_z]).diag_embed() / 2
             return pz_c.log_prob(z)
 
     def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
@@ -208,28 +203,25 @@ class VampPrior(lightning.LightningModule):
             log_v, log_vm1 = self.log_v_and_log_vm1()
             log_probs += log_v + torch.concat([torch.zeros_like(log_vm1)[:1], torch.cumsum(log_vm1, dim=0)[:-1]])
 
-        return dist.Categorical(probs=F.softmax(log_probs, dim=1))
-
-    def qalpha0(self):
-        return dist.InverseGamma(*self.a_and_b())
+        return dist.Categorical(logits=log_probs)
 
     def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
         dkl_z = -qz_x.entropy()
-        if self.categorical_prior or self.dirichlet_prior or self.dirichlet_process:
+        if (self.categorical_prior or self.dirichlet_prior or self.dirichlet_process) and self.kl_warmup == 0:
             dkl_z -= (qc_z.probs * log_pz_c).sum(dim=-1)
         else:
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
         return dkl_z.sum()
 
     def dkl_c(self, qc_z: dist.Categorical):
-        if self.categorical_prior:
+        if self.categorical_prior and self.kl_warmup == 0:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
-        elif self.dirichlet_prior:
+        elif self.dirichlet_prior and self.kl_warmup == 0:
             alpha, _ = self.alpha_and_beta()
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
-        elif self.dirichlet_process:
+        elif self.dirichlet_process and self.kl_warmup == 0:
             log_v, log_vm1 = self.log_v_and_log_vm1()
             qc_gtj_z = torch.fliplr(torch.cumsum(torch.fliplr(qc_z.probs), dim=1)[:, :-1])
             qc_gtj_z = torch.concat([qc_gtj_z, torch.zeros_like(qc_gtj_z)[:, :1]], dim=1)
@@ -239,42 +231,28 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_pi(self):
-        alpha, _ = self.alpha_and_beta()
-        q = dist.Dirichlet(alpha)
-        if self.dirichlet_prior and self.inverse_gamma_prior:
-            alpha0 = self.qalpha0().rsample()  # TODO: anything more than a single MC sample loses gradients
-            p = dist.Dirichlet(alpha0 * torch.ones_like(alpha) / self.k)
-            return dist.kl_divergence(q, p)
-
-        elif self.dirichlet_prior:
+        if self.dirichlet_prior and self.kl_warmup == 0:
+            alpha, _ = self.alpha_and_beta()
+            q = dist.Dirichlet(alpha)
             p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
             return dist.kl_divergence(q, p)
         else:
             return 0
 
     def dkl_v(self):
-        q = dist.Beta(*self.alpha_and_beta())
-        if self.dirichlet_process and self.inverse_gamma_prior:
-            alpha0 = self.qalpha0().rsample()  # TODO: anything more than a single MC sample loses gradients
-            return dist.kl_divergence(q, dist.Beta(1, alpha0))[:-1].sum()
-        elif self.dirichlet_process:
-            return dist.kl_divergence(q, dist.Beta(1, 1))[:-1].sum()
-        else:
-            return 0
-
-    def dkl_alpha0(self):
-        if self.dirichlet_prior and self.inverse_gamma_prior:
-            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 1))
-        elif self.dirichlet_process and self.inverse_gamma_prior:
-            return dist.kl_divergence(self.qalpha0(), dist.InverseGamma(1, 30))
+        if self.dirichlet_process and self.kl_warmup == 0:
+            q = dist.Beta(*self.alpha_and_beta())
+            p = dist.Beta(1, 1)
+            return dist.kl_divergence(q, p)[:-1].sum()
         else:
             return 0
 
     def dkl_Lambda(self):
-        if self.wishart_prior:
+        if self.wishart_prior and self.kl_warmup == 0:
             n_q, V_q = self.n_and_V()
-            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
             V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
+            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (1 / self.dim_z)
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -302,10 +280,10 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_alpha0()  # zero unless Inverse Gamma prior
             - self.dkl_Lambda()  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
+        self.kl_warmup = max(self.kl_warmup - 1, 0)
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
@@ -343,15 +321,15 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
+    parser.add_argument('--decoupled_variance', action='store_true', default=False)
     parser.add_argument('--dirichlet_prior', action='store_true', default=False)
     parser.add_argument('--dirichlet_process', action='store_true', default=False)
-    parser.add_argument('--inverse_gamma_prior', action='store_true', default=False)
     parser.add_argument('--wishart_prior', action='store_true', default=False)
 
     args = parser.parse_args()
@@ -373,7 +351,7 @@ if __name__ == '__main__':
         'drop_last': True,
         'num_workers': 4,
         'persistent_workers': True,
-        'pin_memory': True
+        'pin_memory': False
     }
     dl_train = torch.utils.data.DataLoader(ds_train, shuffle=True, **dl_kwargs)
     dl_test = torch.utils.data.DataLoader(ds_test, shuffle=False, **dl_kwargs)
@@ -386,14 +364,14 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder,
         decoder=Decoder,
-        # u_initial=next(iter(dl_train))['x'][:args.truncation_level],
+        u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
         u_constraint=F.tanh,
         truncation_level=args.truncation_level,
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
+        decoupled_variance=args.decoupled_variance,
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
-        inverse_gamma_prior=args.inverse_gamma_prior,
         wishart_prior=args.wishart_prior,
     )
 
