@@ -250,7 +250,6 @@ class VampPrior(lightning.LightningModule):
     def dkl_Lambda(self):
         if self.wishart_prior and self.kl_warmup == 0:
             n_q, V_q = self.n_and_V()
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (2 / self.dim_z) * (self.dim_z + 2)
             n_p = torch.as_tensor(self.dim_z).to(n_q.device)
             V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (1 / self.dim_z)
             V_p_inv_V_q = V_p_inv @ V_q
