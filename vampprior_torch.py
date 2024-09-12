@@ -141,13 +141,15 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.wishart_prior
         )
         self.L_uc = nn.Parameter(
-            torch.zeros([self.k, self.dim_z, self.dim_z]) - self.n_uc[:, None].repeat([1, self.dim_z]).diag_embed() / 2,
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
         self.kl_warmup = 5_000
+        # train_elbo=1.07e+3, val_elbo=1.02e+3, clusters=37.00, acc=0.946, nmi=0.838
+        # Best score: 0.840
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
@@ -177,11 +179,9 @@ class VampPrior(lightning.LightningModule):
         elif self.decoupled_variance and self.kl_warmup == 0:
             return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
-            if self.kl_warmup == 1:
+            if self.kl_warmup == 1 and self.decoupled_variance:
                 L = torch.linalg.cholesky(pz_c.precision_matrix)
-                self.L_uc.data =  L.tril(-1) + (L.diagonal(dim1=-2, dim2=-1).log()).diag_embed()
-                if self.wishart_prior:
-                    self.L_uc.data -= self.n_uc[:, None].repeat([1, self.dim_z]).diag_embed() / 2
+                self.L_uc.data =  L.tril(-1) + utils.softplus_inverse(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
             return pz_c.log_prob(z)
 
     def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
@@ -194,12 +194,12 @@ class VampPrior(lightning.LightningModule):
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
-        if self.categorical_prior:
+        if self.categorical_prior and self.kl_warmup == 0:
             log_probs -= torch.log(self.k)
-        elif self.dirichlet_prior:
+        elif self.dirichlet_prior and self.kl_warmup == 0:
             alpha, _ = self.alpha_and_beta()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
-        elif self.dirichlet_process:
+        elif self.dirichlet_process and self.kl_warmup == 0:
             log_v, log_vm1 = self.log_v_and_log_vm1()
             log_probs += log_v + torch.concat([torch.zeros_like(log_vm1)[:1], torch.cumsum(log_vm1, dim=0)[:-1]])
 
@@ -251,7 +251,7 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior and self.kl_warmup == 0:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z).to(n_q.device)
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / self.k ** (1 / self.dim_z)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device)
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -377,7 +377,7 @@ if __name__ == '__main__':
     # train model
     torch.set_float32_matmul_precision('high')
     trainer = lightning.Trainer(
-        callbacks=[callbacks.EarlyStopping(monitor='val_elbo', patience=20, mode='max')],
+        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=20, mode='max', verbose=True)],
         devices=1,
         enable_checkpointing=False,
         logger=False,
