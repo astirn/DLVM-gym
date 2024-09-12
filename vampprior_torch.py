@@ -137,7 +137,7 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
-            torch.log(self.dim_z * torch.ones(self.k)),
+            utils.softplus_inverse(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
         self.L_uc = nn.Parameter(
@@ -156,8 +156,9 @@ class VampPrior(lightning.LightningModule):
         return self.alpha_uc.exp(), self.beta_uc.exp()
 
     def n_and_V(self):
-        L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp()).diag_embed()
-        return self.n_uc.exp(), L @ L.mT
+        n = F.softplus(self.n_uc)
+        L = utils.scale_tril(self.L_uc)
+        return n, L @ L.mT
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
