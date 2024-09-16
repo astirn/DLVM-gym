@@ -67,16 +67,13 @@ if __name__ == '__main__':
     pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.25)
     pz = dist.MixtureSameFamily(dist.Categorical(probs=torch.tensor([0.5, 0.5])), pz_c)
     c = pc.sample(sample_shape=torch.Size([args.num_samples]))
-    z_c = torch.gather(pz_c.sample(sample_shape=torch.Size([args.num_samples])), dim=1, index=c[:, None]).squeeze()
-    x_zc = torch.stack([torch.cos(z_c) + (c - 0.5), torch.sin(z_c) - (c - 0.5)], dim=1)
+    z = torch.gather(pz_c.sample(sample_shape=torch.Size([args.num_samples])), dim=1, index=c[:, None]).squeeze()
+    x = torch.stack([torch.cos(z) + (c - 0.5), torch.sin(z) - (c - 0.5)], dim=1)
     epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 2e-2).sample(sample_shape=torch.Size([args.num_samples]))
-    x_zc = x_zc + epsilon
-
-    sns.scatterplot(x=x_zc[:, 0], y=x_zc[:, 1], hue=c)
-    plt.show()
+    x = x + epsilon
 
     dataloader = data.DataLoader(
-        data.TensorDataset(x_zc, c),
+        data.TensorDataset(x, c),
         batch_size=args.num_samples,
         collate_fn=collate,
         shuffle=True
@@ -84,8 +81,8 @@ if __name__ == '__main__':
 
     # test cases
     common_kwargs = dict(
-        dim_x=2,
-        dim_z=1,
+        dim_x=x.shape[1],
+        dim_z=z.shape[0],
         num_data=args.num_samples,
         encoder=Encoder,
         decoder=Decoder,
@@ -96,7 +93,19 @@ if __name__ == '__main__':
     test_cases = {
         "VampPrior": VampPrior(
             **common_kwargs
-        )
+        ),
+        "1": VampPrior(
+            kl_warmup=1_000,
+            dirichlet_prior=True,
+            wishart_prior=True,
+            **common_kwargs
+        ),
+        "2": VampPrior(
+            kl_warmup=1_000,
+            dirichlet_process=True,
+            wishart_prior=True,
+            **common_kwargs
+        ),
     }
 
     for name, model, in test_cases.items():
@@ -113,9 +122,7 @@ if __name__ == '__main__':
         )
         trainer.fit(model, train_dataloaders=dataloader, val_dataloaders=dataloader)
 
-
-        # z plot for x axis
-        cluster_assignments = model.qc_z(model.log_pz_c(model.qz_x(x_zc).sample())).probs.argmax(dim=1)
+        cluster_assignments = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs.argmax(dim=1)
         utilized_clusters = cluster_assignments.unique()
         pz_c_model = model.qz_x(model.u_uc)
         pz_model = dist.MixtureSameFamily(model.pc(), pz_c_model)
@@ -129,38 +136,18 @@ if __name__ == '__main__':
             steps=1000
         ).unsqueeze(dim=1)
 
-        # # find a,b such that p(a * z - b) is close to model's p(z)
-        # z_sweep = np.linspace(min(min(pz_c.mean() - 3 * pz_c.stddev()), min(z_plot)),
-        #                       max(max(pz_c.mean() + 3 * pz_c.stddev()), max(z_plot)), 1_000)
-        # model_prob = model.prior.pz(encoder=model.qz).prob(z_sweep[:, None]).numpy()
-        # model_log_prob = model.prior.pz(encoder=model.qz).log_prob(z_sweep[:, None]).numpy()
-        # def jsd(p):
-        #     prior_z = np.exp(p[0]) * z_sweep - p[1]
-        #     prior_prob = pz.prob(prior_z).numpy()
-        #     prior_log_prob = pz.log_prob(prior_z).numpy()
-        #     return (prior_prob * (prior_log_prob - model_log_prob) + model_prob * (model_log_prob - prior_log_prob)).mean()
-        # res = minimize(
-        #     fun=jsd,
-        #     x0=np.array([1.0, 0.0]),
-        #     method='powell')
-        #
-        # # change of variable for true p(z)
-        # pz_true = pz.prob(np.exp(res.x[0]) * z_plot - res.x[1]) * np.exp(res.x[0])
-
-
         # plot p(z|c) and p(z)
-        fig, ax = plt.subplots(nrows=2, sharex=True, figsize=(8, 8))
+        fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
         ax[0].set_title(f'{name} Component Densities')
         ax[0].plot(z_plot, pz_c_model.log_prob(z_plot[:, None])[:, utilized_clusters].exp().detach())
-        # ax[0].set_ylabel('density')
-        ax[1].set_title(f'{name} Mixture Densities')
-        ax[1].plot(z_plot, pz_model.log_prob(z_plot).exp().detach(), label="Model's density")
-        ax[1].plot(z_plot, pz.log_prob(z_plot).exp().detach(), color='black', linestyle='--', label="True density (aligned via affine warping)")
-        ax[1].legend()
+        ax[1].set_xlabel('z')
+        ax[0].set_ylabel('density')
+        ax[1].set_title(f'{name} Mixture density')
+        ax[1].plot(z_plot, pz_model.log_prob(z_plot).exp().detach())
         ax[1].set_xlabel('z')
         ax[1].set_ylabel('density')
+        sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=np.unique(cluster_assignments, return_inverse=True)[1], ax=ax[2])
         plt.tight_layout()
         plt.show()
-        # fig.savefig(os.path.join('results', f'decoupling-{clean_prior_name(test_case["prior"])}.pdf'))
 
         torch.cuda.empty_cache()
