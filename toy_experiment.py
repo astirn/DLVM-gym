@@ -6,20 +6,24 @@ import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from cytoolz import merge_with
 from vampprior_torch import VampPrior
 
+HIDDEN_DIM = 100
+
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
-        self.net = nn.Sequential(nn.Linear(dim_x, 10), nn.Tanh())
-        self.mu = nn.Linear(10, dim_z)
-        self.sigma = nn.Sequential(nn.Linear(10, dim_z), nn.Softplus())
+        self.net = nn.Sequential(
+            nn.Linear(dim_x, HIDDEN_DIM),
+            nn.Tanh(),
+        )
+        self.mu = nn.Linear(HIDDEN_DIM, dim_z)
+        self.sigma = nn.Sequential(nn.Linear(HIDDEN_DIM, dim_z), nn.Softplus())
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
@@ -31,7 +35,11 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
-        self.mu = nn.Sequential(nn.Linear(dim_z, 10), nn.Tanh(), nn.Linear(10, dim_x))
+        self.mu = nn.Sequential(
+            nn.Linear(dim_z, HIDDEN_DIM),
+            nn.Tanh(),
+            nn.Linear(HIDDEN_DIM, dim_x),
+        )
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
@@ -47,9 +55,11 @@ def collate(batch):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dataset', type=str, default='noisy moons')
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--num_epochs', type=int, default=5_000)
-    parser.add_argument('--num_samples', type=int, default=100)
+    parser.add_argument('--num_epochs', type=int, default=10_000)
+    parser.add_argument('--num_samples', type=int, default=1_000)
     parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
@@ -81,14 +91,14 @@ if __name__ == '__main__':
 
     # test cases
     common_kwargs = dict(
-        dim_x=x.shape[1],
-        dim_z=z.shape[0],
+        dim_x=2,
+        dim_z=1,
         num_data=args.num_samples,
         encoder=Encoder,
         decoder=Decoder,
         truncation_level=args.truncation_level,
         learning_rate=args.learning_rate,
-        u_initial=next(iter(dataloader))['x'][:args.truncation_level],
+        # u_initial=next(iter(dataloader))['x'][:args.truncation_level],
     )
     test_cases = {
         "VampPrior": VampPrior(
@@ -120,12 +130,11 @@ if __name__ == '__main__':
             max_epochs=args.num_epochs,
             num_sanity_val_steps=0,
         )
-        trainer.fit(model, train_dataloaders=dataloader, val_dataloaders=dataloader)
+        trainer.fit(model, train_dataloaders=dataloader)
 
         cluster_assignments = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs.argmax(dim=1)
         utilized_clusters = cluster_assignments.unique()
         pz_c_model = model.qz_x(model.u_uc)
-        pz_model = dist.MixtureSameFamily(model.pc(), pz_c_model)
         cluster_means = pz_c_model.mean[utilized_clusters].squeeze()
         cluster_stds = pz_c_model.stddev[utilized_clusters].squeeze()
         i_max = cluster_means.argmax()
@@ -136,7 +145,7 @@ if __name__ == '__main__':
             steps=1000
         ).unsqueeze(dim=1)
 
-        # plot p(z|c) and p(z)
+        pz_model = dist.MixtureSameFamily(model.pc(), pz_c_model)
         fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
         ax[0].set_title(f'{name} Component Densities')
         ax[0].plot(z_plot, pz_c_model.log_prob(z_plot[:, None])[:, utilized_clusters].exp().detach())
@@ -146,7 +155,7 @@ if __name__ == '__main__':
         ax[1].plot(z_plot, pz_model.log_prob(z_plot).exp().detach())
         ax[1].set_xlabel('z')
         ax[1].set_ylabel('density')
-        sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=np.unique(cluster_assignments, return_inverse=True)[1], ax=ax[2])
+        sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=cluster_assignments.unique(return_inverse=True)[1], ax=ax[2])
         plt.tight_layout()
         plt.show()
 
