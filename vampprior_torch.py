@@ -107,6 +107,7 @@ class VampPrior(lightning.LightningModule):
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
+        self.save_hyperparameters()
 
         self.dim_x = dim_x
         self.dim_z = dim_z
@@ -142,7 +143,7 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.wishart_prior
         )
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * utils.softplus_inverse(torch.as_tensor(0.25)),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
@@ -292,7 +293,7 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior and self.kl_warmup == 0:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z).to(n_q.device)
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / 0.25 ** 2
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
