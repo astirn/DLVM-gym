@@ -17,14 +17,12 @@ from vampprior_torch import VampPrior
 HIDDEN_DIM = 100
 TEST_CASES = {
     "VampPrior": dict(),
-    "VP + Dir. + Wish. priors": dict(
-        dirichlet_process=True,
-        wishart_prior=True,
-    ),
-    "VP + DP + Wish. priors": dict(
-        dirichlet_process=True,
-        wishart_prior=True,
-    )
+    "with decoupled variance": dict(decoupled_variance=True),
+    "with Wish. priors": dict(wishart_prior=True),
+    "with Dir. priors": dict(dirichlet_prior=True),
+    "with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
+    "with DP priors": dict(dirichlet_process=True),
+    "with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
 }
 
 
@@ -134,7 +132,6 @@ def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool
                 devices=1,
                 enable_checkpointing=False,
                 logger=False,
-                # max_epochs=args.num_epochs,
                 max_epochs=-1,
                 num_sanity_val_steps=0,
             )
@@ -194,7 +191,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--dataset', type=str, default='custom')
-    parser.add_argument('--num_epochs', type=int, default=10_000)
     parser.add_argument('--num_samples', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--replace_results', action='store_true')
