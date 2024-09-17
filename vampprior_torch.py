@@ -96,6 +96,7 @@ class VampPrior(lightning.LightningModule):
             decoder: callable,
             learning_rate: float,
             truncation_level: int,
+            kl_warmup: int = 0,
             u_initial: torch.Tensor = None,
             u_constraint: callable = None,
             categorical_prior: bool = False,
@@ -147,9 +148,7 @@ class VampPrior(lightning.LightningModule):
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
-        self.kl_warmup = 5_000
-        # train_elbo=1.07e+3, val_elbo=1.02e+3, clusters=37.00, acc=0.946, nmi=0.838
-        # Best score: 0.840
+        self.kl_warmup = kl_warmup
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
@@ -159,6 +158,47 @@ class VampPrior(lightning.LightningModule):
         n = F.softplus(self.n_uc)
         L = utils.scale_tril(self.L_uc)
         return n, L @ L.mT
+
+    def pc(self):
+        if self.dirichlet_prior:
+            alpha, _ = self.alpha_and_beta()
+            probs = alpha / alpha.sum()
+        elif self.dirichlet_process:
+            alpha, beta = self.alpha_and_beta()
+            v = (alpha / (alpha + beta))[:-1]
+            v = torch.concat([v, torch.as_tensor([1]).to(v.device)])
+            vm1 = (beta / (alpha + beta))[:-1]
+            vm1 = torch.concat([vm1, torch.as_tensor([0]).to(v.device)])
+            probs = v * torch.concat([torch.ones_like(vm1)[:1], torch.cumprod(vm1, dim=0)[:-1]])
+        else:
+            probs = torch.ones(self.k) / self.k
+
+        return dist.Categorical(probs=probs)
+
+    def pz_c(self, z: torch.Tensor) -> torch.Tensor:
+        z = z[:, None]
+        pz_c = self.qz_x(self.u_constraint(self.u_uc))
+        if self.decoupled_variance:
+            return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z).exp()
+        elif self.wishart_prior:
+            n, V = self.n_and_V()
+            nu = n - self.dim_z + 1
+            Lambda = (nu[:, None, None] * V)
+            quadratic = torch.squeeze(
+                torch.unsqueeze(z - pz_c.mean, dim=2)
+                @ Lambda @
+                torch.unsqueeze(z - pz_c.mean, dim=3)
+            )
+            ll = (
+                + torch.lgamma((nu + self.dim_z) / 2)
+                - torch.lgamma(nu / 2)
+                - 0.5 * (nu * torch.pi).log()
+                + 0.5 * Lambda.slogdet().logabsdet
+                - 0.5 * (nu + self.dim_z) * (1 + quadratic / nu)
+            )
+            return ll.exp()
+        else:
+            return pz_c.log_prob(z).exp()
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]

@@ -66,10 +66,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # # make experiment directory
-    # exp_path = os.path.join('experiments', 'decoupling')
-    # os.makedirs(exp_path, exist_ok=True)
-
     torch.set_float32_matmul_precision('high')
 
     # sample data from generative process
@@ -98,7 +94,6 @@ if __name__ == '__main__':
         decoder=Decoder,
         truncation_level=args.truncation_level,
         learning_rate=args.learning_rate,
-        # u_initial=next(iter(dataloader))['x'][:args.truncation_level],
     )
     test_cases = {
         "VampPrior": VampPrior(
@@ -132,9 +127,13 @@ if __name__ == '__main__':
         )
         trainer.fit(model, train_dataloaders=dataloader)
 
-        cluster_assignments = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs.argmax(dim=1)
+        # cluster assignments
+        cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
+        cluster_assignments = cluster_probabilities.argmax(dim=1)
         utilized_clusters = cluster_assignments.unique()
-        pz_c_model = model.qz_x(model.u_uc)
+
+        # latent plot range
+        pz_c_model = model.qz_x(model.u_uc)  # doesn't handle wishart
         cluster_means = pz_c_model.mean[utilized_clusters].squeeze()
         cluster_stds = pz_c_model.stddev[utilized_clusters].squeeze()
         i_max = cluster_means.argmax()
@@ -145,14 +144,17 @@ if __name__ == '__main__':
             steps=1000
         ).unsqueeze(dim=1)
 
-        pz_model = dist.MixtureSameFamily(model.pc(), pz_c_model)
+        pc_model = model.pc()
+        pz_c_model = model.pz_c(z_plot)
+        pz_model = (pc_model.probs * pz_c_model).sum(dim=1)
+
         fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
         ax[0].set_title(f'{name} Component Densities')
-        ax[0].plot(z_plot, pz_c_model.log_prob(z_plot[:, None])[:, utilized_clusters].exp().detach())
+        ax[0].plot(z_plot, pz_c_model[:, utilized_clusters].detach())
         ax[1].set_xlabel('z')
         ax[0].set_ylabel('density')
         ax[1].set_title(f'{name} Mixture density')
-        ax[1].plot(z_plot, pz_model.log_prob(z_plot).exp().detach())
+        ax[1].plot(z_plot, pz_model.detach())
         ax[1].set_xlabel('z')
         ax[1].set_ylabel('density')
         sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=cluster_assignments.unique(return_inverse=True)[1], ax=ax[2])
