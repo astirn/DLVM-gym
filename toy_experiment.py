@@ -1,18 +1,31 @@
 import argparse
-import os
 import lightning
+import lightning.pytorch.callbacks as callbacks
+import matplotlib.pyplot as plt
+import os
+import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 from cytoolz import merge_with
+from sklearn import datasets
 from vampprior_torch import VampPrior
 
 HIDDEN_DIM = 100
+TEST_CASES = {
+    "VampPrior": dict(),
+    "VP + Dir. + Wish. priors": dict(
+        dirichlet_process=True,
+        wishart_prior=True,
+    ),
+    "VP + DP + Wish. priors": dict(
+        dirichlet_process=True,
+        wishart_prior=True,
+    )
+}
 
 
 class Encoder(nn.Module):
@@ -23,7 +36,10 @@ class Encoder(nn.Module):
             nn.Tanh(),
         )
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
-        self.sigma = nn.Sequential(nn.Linear(HIDDEN_DIM, dim_z), nn.Softplus())
+        self.sigma = nn.Sequential(
+            nn.Linear(HIDDEN_DIM, dim_z),
+            nn.Softplus()
+        )
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
@@ -53,112 +69,147 @@ def collate(batch):
     return batch
 
 
+def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    if dataset == "blobs":
+        dataset = datasets.make_blobs(n_samples=num_samples, random_state=seed)
+        x, c = map(torch.Tensor, dataset)
+    elif dataset == "circles":
+        dataset = datasets.make_circles(n_samples=num_samples, factor=0.5, noise=0.05, random_state=seed)
+        x, c = map(torch.Tensor, dataset)
+    elif dataset == "custom":
+        num_samples = torch.Size([num_samples])
+        pc = dist.Categorical(probs=torch.tensor([0.5, 0.5]))
+        pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.25)
+        c = pc.sample(num_samples)
+        z = torch.gather(pz_c.sample(num_samples), dim=1, index=c[:, None]).squeeze()
+        x = torch.stack([torch.cos(z) + (c - 0.5), torch.sin(z) - (c - 0.5)], dim=1)
+        epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 2e-2).sample(num_samples)
+        x = x + epsilon
+    elif dataset == "moons":
+        dataset = datasets.make_moons(n_samples=num_samples, noise=0.05, random_state=seed)
+        x, c = map(torch.Tensor, dataset)
+    else:
+        raise NotImplementedError
+
+    return data.TensorDataset(x, c)
+
+
+def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool, seed: int | None):
+    for name, config in TEST_CASES.items():
+        if seed is not None:
+            torch.manual_seed(seed)
+
+        checkpoint_file = f'{base_dir}/{name}/model.ckpt'
+        if not os.path.exists(checkpoint_file) or replace_results:
+
+            dataloader = data.DataLoader(
+                dataset,
+                batch_size=len(dataset),
+                collate_fn=collate,
+                shuffle=True
+            )
+
+            model = VampPrior(
+                dim_x=2,
+                dim_z=1,
+                num_data=len(dataset),
+                encoder=Encoder,
+                decoder=Decoder,
+                truncation_level=100,
+                learning_rate=5e-4,
+                **config
+            )
+
+            trainer = lightning.Trainer(
+                callbacks=[callbacks.EarlyStopping(
+                    min_delta=0.01,
+                    monitor='train_elbo',
+                    mode='max',
+                    patience=500,
+                    verbose=True
+                )],
+                devices=1,
+                enable_checkpointing=False,
+                logger=False,
+                # max_epochs=args.num_epochs,
+                max_epochs=-1,
+                num_sanity_val_steps=0,
+            )
+            trainer.fit(model, train_dataloaders=dataloader)
+            trainer.save_checkpoint(checkpoint_file)
+
+        torch.cuda.empty_cache()
+
+
+def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
+    for name, config in TEST_CASES.items():
+        if seed is not None:
+            torch.manual_seed(seed)
+
+        x = dataset.tensors[0]
+
+        checkpoint_file = f'{base_dir}/{name}/model.ckpt'
+        if os.path.exists(checkpoint_file):
+
+            model = VampPrior.load_from_checkpoint(checkpoint_file)
+
+            cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
+            cluster_assignments = cluster_probabilities.argmax(dim=1)
+            utilized_clusters = cluster_assignments.unique()
+
+            # latent plot range
+            pz_c_model = model.qz_x(model.u_uc)  # doesn't handle wishart
+            cluster_means = pz_c_model.mean[utilized_clusters].squeeze()
+            cluster_stds = pz_c_model.stddev[utilized_clusters].squeeze()
+            i_max = cluster_means.argmax()
+            i_min = cluster_means.argmin()
+            z_plot = torch.linspace(
+                start=cluster_means[i_min] - 3 * cluster_stds[i_min],
+                end=cluster_means[i_max] + 3 * cluster_stds[i_max],
+                steps=1000
+            ).unsqueeze(dim=1)
+
+            pc_model = model.pc()
+            pz_c_model = model.pz_c(z_plot)
+            pz_model = (pc_model.probs * pz_c_model).sum(dim=1)
+
+            fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
+            ax[0].set_title(f'{name} Component Densities')
+            ax[0].plot(z_plot, pz_c_model[:, utilized_clusters].detach())
+            ax[1].set_xlabel('z')
+            ax[0].set_ylabel('density')
+            ax[1].set_title(f'{name} Mixture density')
+            ax[1].plot(z_plot, pz_model.detach())
+            ax[1].set_xlabel('z')
+            ax[1].set_ylabel('density')
+            sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=cluster_assignments.unique(return_inverse=True)[1], ax=ax[2])
+            plt.tight_layout()
+            plt.show()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', type=str, default='noisy moons')
-    parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--dataset', type=str, default='custom')
     parser.add_argument('--num_epochs', type=int, default=10_000)
     parser.add_argument('--num_samples', type=int, default=1_000)
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--truncation_level', type=int, default=100)
+    parser.add_argument('--replace_results', action='store_true')
 
     args = parser.parse_args()
 
+    experiment_dir = f'experiments/toy/{args.dataset}'
+    os.makedirs(experiment_dir, exist_ok=True)
+
+    if args.seed is not None:
+        torch.backends.cudnn.benchmark = False
     torch.set_float32_matmul_precision('high')
 
-    # sample data from generative process
-    pc = dist.Categorical(probs=torch.tensor([0.5, 0.5]))
-    pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.25)
-    pz = dist.MixtureSameFamily(dist.Categorical(probs=torch.tensor([0.5, 0.5])), pz_c)
-    c = pc.sample(sample_shape=torch.Size([args.num_samples]))
-    z = torch.gather(pz_c.sample(sample_shape=torch.Size([args.num_samples])), dim=1, index=c[:, None]).squeeze()
-    x = torch.stack([torch.cos(z) + (c - 0.5), torch.sin(z) - (c - 0.5)], dim=1)
-    epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 2e-2).sample(sample_shape=torch.Size([args.num_samples]))
-    x = x + epsilon
+    toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
-    dataloader = data.DataLoader(
-        data.TensorDataset(x, c),
-        batch_size=args.num_samples,
-        collate_fn=collate,
-        shuffle=True
-    )
+    fit_models(toy_data, experiment_dir, args.replace_results, args.seed)
 
-    # test cases
-    common_kwargs = dict(
-        dim_x=2,
-        dim_z=1,
-        num_data=args.num_samples,
-        encoder=Encoder,
-        decoder=Decoder,
-        truncation_level=args.truncation_level,
-        learning_rate=args.learning_rate,
-    )
-    test_cases = {
-        "VampPrior": VampPrior(
-            **common_kwargs
-        ),
-        "1": VampPrior(
-            kl_warmup=1_000,
-            dirichlet_prior=True,
-            wishart_prior=True,
-            **common_kwargs
-        ),
-        "2": VampPrior(
-            kl_warmup=1_000,
-            dirichlet_process=True,
-            wishart_prior=True,
-            **common_kwargs
-        ),
-    }
-
-    for name, model, in test_cases.items():
-        if args.seed is not None:
-            torch.backends.cudnn.benchmark = False
-            torch.manual_seed(args.seed)
-
-        trainer = lightning.Trainer(
-            devices=1,
-            enable_checkpointing=False,
-            logger=False,
-            max_epochs=args.num_epochs,
-            num_sanity_val_steps=0,
-        )
-        trainer.fit(model, train_dataloaders=dataloader)
-
-        # cluster assignments
-        cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
-        cluster_assignments = cluster_probabilities.argmax(dim=1)
-        utilized_clusters = cluster_assignments.unique()
-
-        # latent plot range
-        pz_c_model = model.qz_x(model.u_uc)  # doesn't handle wishart
-        cluster_means = pz_c_model.mean[utilized_clusters].squeeze()
-        cluster_stds = pz_c_model.stddev[utilized_clusters].squeeze()
-        i_max = cluster_means.argmax()
-        i_min = cluster_means.argmin()
-        z_plot = torch.linspace(
-            start=cluster_means[i_min] - 3 * cluster_stds[i_min],
-            end=cluster_means[i_max] + 3 * cluster_stds[i_max],
-            steps=1000
-        ).unsqueeze(dim=1)
-
-        pc_model = model.pc()
-        pz_c_model = model.pz_c(z_plot)
-        pz_model = (pc_model.probs * pz_c_model).sum(dim=1)
-
-        fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
-        ax[0].set_title(f'{name} Component Densities')
-        ax[0].plot(z_plot, pz_c_model[:, utilized_clusters].detach())
-        ax[1].set_xlabel('z')
-        ax[0].set_ylabel('density')
-        ax[1].set_title(f'{name} Mixture density')
-        ax[1].plot(z_plot, pz_model.detach())
-        ax[1].set_xlabel('z')
-        ax[1].set_ylabel('density')
-        sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=cluster_assignments.unique(return_inverse=True)[1], ax=ax[2])
-        plt.tight_layout()
-        plt.show()
-
-        torch.cuda.empty_cache()
+    plot_results(toy_data, experiment_dir, args.seed)
