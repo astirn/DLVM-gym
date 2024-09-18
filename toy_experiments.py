@@ -156,7 +156,7 @@ def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
             model = VampPrior.load_from_checkpoint(checkpoint_file)
 
             cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
-            cluster_assignments = cluster_probabilities.argmax(dim=1)#.unique(return_inverse=True)[1]
+            cluster_assignments = cluster_probabilities.argmax(dim=1)
 
             z_plot = torch.linspace(start=-30, end=30, steps=5000).unsqueeze(dim=1)
             pc_model = model.pc()
@@ -178,7 +178,7 @@ def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
             ax.set_title('Mixture Density')
             ax.set_ylabel('density')
             ax.set_yticks([])
-            ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.5, color='black')
+            ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
 
             ax = fig.add_subplot(gs[1, :])
             ax.set_title('Scaled Component Densities')
@@ -186,18 +186,21 @@ def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
             ax.set_xticks([])
             ax.set_ylabel('density')
             ax.set_yticks([])
-            sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, palette=palette)
+            sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=palette)
             ax.get_legend().remove()
-
 
             ax = fig.add_subplot(gs[2:, :])
             ax.set_title('Data Cluster Assignments')
+            ax.set_xlabel('$x_1$')
+            ax.set_xticks([])
+            ax.set_ylabel('$x_2$')
+            ax.set_yticks([])
             sns.scatterplot(
                 x=x[:, 0],
                 y=x[:, 1],
                 hue=cluster_assignments,
+                hue_order=range(model.k),
                 palette=palette,
-                style=cluster_assignments,
             )
             ax.get_legend().remove()
 
