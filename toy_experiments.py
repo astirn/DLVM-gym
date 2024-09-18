@@ -10,19 +10,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 
-from cytoolz import merge_with
+from cytoolz import interleave, merge_with, pipe
+from cytoolz.curried import partition
+from matplotlib.gridspec import GridSpec
 from sklearn import datasets
 from vampprior_torch import VampPrior
 
 HIDDEN_DIM = 100
 TEST_CASES = {
     "VampPrior": dict(),
-    "with decoupled variance": dict(decoupled_variance=True),
-    "with Wish. priors": dict(wishart_prior=True),
-    "with Dir. priors": dict(dirichlet_prior=True),
-    "with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
-    "with DP priors": dict(dirichlet_process=True),
-    "with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
+    "VampPrior with decoupled variance": dict(decoupled_variance=True),
+    "VampPrior with Wish. priors": dict(wishart_prior=True),
+    "VampPrior with Dir. priors": dict(dirichlet_prior=True),
+    "VampPrior with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
+    "VampPrior with DP priors": dict(dirichlet_process=True),
+    "VampPrior with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
 }
 
 
@@ -154,35 +156,51 @@ def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
             model = VampPrior.load_from_checkpoint(checkpoint_file)
 
             cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
-            cluster_assignments = cluster_probabilities.argmax(dim=1)
-            utilized_clusters = cluster_assignments.unique()
+            cluster_assignments = cluster_probabilities.argmax(dim=1)#.unique(return_inverse=True)[1]
 
-            # latent plot range
-            pz_c_model = model.qz_x(model.u_uc)  # doesn't handle wishart
-            cluster_means = pz_c_model.mean[utilized_clusters].squeeze()
-            cluster_stds = pz_c_model.stddev[utilized_clusters].squeeze()
-            i_max = cluster_means.argmax()
-            i_min = cluster_means.argmin()
-            z_plot = torch.linspace(
-                start=cluster_means[i_min] - 3 * cluster_stds[i_min],
-                end=cluster_means[i_max] + 3 * cluster_stds[i_max],
-                steps=1000
-            ).unsqueeze(dim=1)
-
+            z_plot = torch.linspace(start=-30, end=30, steps=5000).unsqueeze(dim=1)
             pc_model = model.pc()
-            pz_c_model = model.pz_c(z_plot)
-            pz_model = (pc_model.probs * pz_c_model).sum(dim=1)
+            pz_c_model = pc_model.probs * model.pz_c(z_plot)
+            pz_model = pz_c_model.sum(dim=1)
+            i_start = (pz_model > 1e-5).nonzero()[0]
+            i_stop = (pz_model > 1e-5).nonzero()[-1]
 
-            fig, ax = plt.subplots(nrows=3, figsize=(12, 12))
-            ax[0].set_title(f'{name} Component Densities')
-            ax[0].plot(z_plot, pz_c_model[:, utilized_clusters].detach())
-            ax[1].set_xlabel('z')
-            ax[0].set_ylabel('density')
-            ax[1].set_title(f'{name} Mixture density')
-            ax[1].plot(z_plot, pz_model.detach())
-            ax[1].set_xlabel('z')
-            ax[1].set_ylabel('density')
-            sns.scatterplot(x=x[:, 0], y=x[:, 1], hue=cluster_assignments.unique(return_inverse=True)[1], ax=ax[2])
+            fig = plt.figure(figsize=(6, 10))
+            fig.suptitle(name)
+            gs = GridSpec(4, 2, figure=fig)
+
+            palette = sns.color_palette('tab20c', n_colors=20) + sns.color_palette('tab20b', n_colors=20)
+            palette = pipe(palette, partition(4), interleave, list)
+
+            ax = fig.add_subplot(gs[0, :])
+            ax.set_xlabel('z')
+            ax.set_xticks([])
+            ax.set_title('Mixture Density')
+            ax.set_ylabel('density')
+            ax.set_yticks([])
+            ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.5, color='black')
+
+            ax = fig.add_subplot(gs[1, :])
+            ax.set_title('Scaled Component Densities')
+            ax.set_xlabel('z')
+            ax.set_xticks([])
+            ax.set_ylabel('density')
+            ax.set_yticks([])
+            sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, palette=palette)
+            ax.get_legend().remove()
+
+
+            ax = fig.add_subplot(gs[2:, :])
+            ax.set_title('Data Cluster Assignments')
+            sns.scatterplot(
+                x=x[:, 0],
+                y=x[:, 1],
+                hue=cluster_assignments,
+                palette=palette,
+                style=cluster_assignments,
+            )
+            ax.get_legend().remove()
+
             plt.tight_layout()
             plt.show()
 
