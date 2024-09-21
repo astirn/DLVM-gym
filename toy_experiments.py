@@ -74,7 +74,12 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
         torch.manual_seed(seed)
 
     if dataset == "blobs":
-        dataset = datasets.make_blobs(n_samples=num_samples, random_state=seed)
+        dataset = datasets.make_blobs(
+            center_box=(-2.5, 2.5),
+            cluster_std=0.25,
+            n_samples=num_samples,
+            random_state=seed,
+        )
         x, c = map(torch.Tensor, dataset)
     elif dataset == "circles":
         dataset = datasets.make_circles(n_samples=num_samples, factor=0.5, noise=0.05, random_state=seed)
