@@ -81,21 +81,24 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
             random_state=seed,
         )
         x, c = map(torch.Tensor, dataset)
-    elif dataset == "circles":
-        dataset = datasets.make_circles(n_samples=num_samples, factor=0.5, noise=0.05, random_state=seed)
-        x, c = map(torch.Tensor, dataset)
-    elif dataset == "custom":
+
+    elif dataset == "gmm":
+        k = torch.Size([3])
+        centers = dist.MultivariateNormal(torch.zeros(2), scale_tril=3 * torch.eye(2)).sample(k)
+        widths = dist.Wishart(5, covariance_matrix=0.25 * torch.eye(2) / 5).sample(k)
+        c = dist.Categorical(logits=torch.ones(k)).sample(torch.Size([num_samples]))
+        x_c = dist.MultivariateNormal(centers, covariance_matrix=widths).sample(torch.Size([num_samples]))
+        x = torch.gather(x_c, dim=1, index=c[:, None, None].repeat([1, 1, 2])).squeeze()
+
+    elif dataset == "moons":
         num_samples = torch.Size([num_samples])
         pc = dist.Categorical(probs=torch.tensor([0.5, 0.5]))
-        pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.25)
+        pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.4)
         c = pc.sample(num_samples)
         z = torch.gather(pz_c.sample(num_samples), dim=1, index=c[:, None]).squeeze()
-        x = torch.stack([torch.cos(z) + (c - 0.5), torch.sin(z) - (c - 0.5)], dim=1)
-        epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 2e-2).sample(num_samples)
+        x = torch.stack([(c - 0.5) - torch.cos(z), (c - 0.5) / 2 - torch.sin(z)], dim=1)
+        epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 0.05).sample(num_samples)
         x = x + epsilon
-    elif dataset == "moons":
-        dataset = datasets.make_moons(n_samples=num_samples, noise=0.05, random_state=seed)
-        x, c = map(torch.Tensor, dataset)
     else:
         raise NotImplementedError
 
@@ -125,6 +128,8 @@ def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool
                 decoder=Decoder,
                 truncation_level=100,
                 learning_rate=5e-4,
+                u_initial=next(iter(dataloader))['x'][:100],
+                variance_init=0.25 ** 2,
                 **config
             )
 
