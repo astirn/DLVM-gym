@@ -103,7 +103,7 @@ class VampPrior(lightning.LightningModule):
             decoupled_variance: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
-            variance_init: float = 1.0,
+            cluster_variance: float = 1.0,
             wishart_prior: bool = False,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
@@ -143,7 +143,7 @@ class VampPrior(lightning.LightningModule):
             utils.softplus_inverse(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
-        Lii = (variance_init * self.dim_z) ** -0.5 if self.wishart_prior else variance_init ** -0.5
+        Lii = (cluster_variance * self.dim_z) ** -0.5 if self.wishart_prior else cluster_variance ** -0.5
         self.L_uc = nn.Parameter(
             torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * utils.softplus_inverse(torch.as_tensor(Lii)),
             requires_grad=self.decoupled_variance or self.wishart_prior,
