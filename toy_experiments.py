@@ -229,7 +229,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_dir = f'experiments/toy/{args.dataset}'
+    experiment_dir = f'experiments/toy/{args.dataset}/{(args.seed)}'
     os.makedirs(experiment_dir, exist_ok=True)
 
     if args.seed is not None:
