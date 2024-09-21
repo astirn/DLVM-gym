@@ -16,6 +16,7 @@ from matplotlib.gridspec import GridSpec
 from sklearn import datasets
 from vampprior_torch import VampPrior
 
+CLUSTER_STD = 0.4
 HIDDEN_DIM = 100
 TEST_CASES = {
     "VampPrior": dict(),
@@ -75,8 +76,8 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
 
     if dataset == "blobs":
         dataset = datasets.make_blobs(
-            center_box=(-2.5, 2.5),
-            cluster_std=0.25,
+            centers=[[-2, 0], [2, 2], [2, -2]],
+            cluster_std=CLUSTER_STD,
             n_samples=num_samples,
             random_state=seed,
         )
@@ -84,8 +85,8 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
 
     elif dataset == "gmm":
         k = torch.Size([3])
-        centers = dist.MultivariateNormal(torch.zeros(2), scale_tril=3 * torch.eye(2)).sample(k)
-        widths = dist.Wishart(5, covariance_matrix=0.25 * torch.eye(2) / 5).sample(k)
+        centers = torch.as_tensor([[-2, 0], [2, 2], [2, -2]], dtype=torch.float32)
+        widths = dist.Wishart(4, scale_tril=CLUSTER_STD ** 0.5 * torch.eye(2) / 2).sample(k)
         c = dist.Categorical(logits=torch.ones(k)).sample(torch.Size([num_samples]))
         x_c = dist.MultivariateNormal(centers, covariance_matrix=widths).sample(torch.Size([num_samples]))
         x = torch.gather(x_c, dim=1, index=c[:, None, None].repeat([1, 1, 2])).squeeze()
@@ -93,7 +94,7 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
     elif dataset == "moons":
         num_samples = torch.Size([num_samples])
         pc = dist.Categorical(probs=torch.tensor([0.5, 0.5]))
-        pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=0.4)
+        pz_c = dist.Normal(loc=torch.tensor([-torch.pi / 2, torch.pi / 2]), scale=CLUSTER_STD)
         c = pc.sample(num_samples)
         z = torch.gather(pz_c.sample(num_samples), dim=1, index=c[:, None]).squeeze()
         x = torch.stack([(c - 0.5) - torch.cos(z), (c - 0.5) / 2 - torch.sin(z)], dim=1)
@@ -129,7 +130,7 @@ def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool
                 truncation_level=100,
                 learning_rate=5e-4,
                 u_initial=next(iter(dataloader))['x'][:100],
-                variance_init=0.25 ** 2,
+                variance_init=CLUSTER_STD ** 2,
                 **config
             )
 
@@ -223,7 +224,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset', type=str, default='custom')
     parser.add_argument('--num_samples', type=int, default=1_000)
-    parser.add_argument('--seed', type=int, default=376616)
+    parser.add_argument('--seed', type=int, default=12345)
     parser.add_argument('--replace_results', action='store_true')
 
     args = parser.parse_args()
