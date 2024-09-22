@@ -130,7 +130,7 @@ def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool
                 truncation_level=100,
                 learning_rate=5e-4,
                 u_initial=next(iter(dataloader))['x'][:100],
-                cluster_variance=CLUSTER_STD ** 2,
+                wishart_expected_variance=CLUSTER_STD ** 2,
                 **config
             )
 
