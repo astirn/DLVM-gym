@@ -1,19 +1,12 @@
-import argparse
 import lightning
-import lightning.pytorch.callbacks as callbacks
-import numpy as np
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
-import torchvision.datasets as datasets
 import utils_torch as utils
 
-from cytoolz import merge_with
 from sklearn.metrics.cluster import normalized_mutual_info_score
-from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
 
 
 class ClusteringMetrics(torchmetrics.Metric):
@@ -43,48 +36,6 @@ class ClusteringMetrics(torchmetrics.Metric):
         }
 
 
-class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim_x, 500),
-            nn.ReLU(),
-            nn.Linear(500, 500),
-            nn.ReLU(),
-            nn.Linear(500, 2000),
-            nn.ReLU(),
-        )
-        self.mu = nn.Linear(2000, dim_z)
-        self.sigma = nn.Sequential(
-            nn.Linear(2000, dim_z),
-            nn.Softplus()
-        )
-
-    def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(x)
-        mu = self.mu(out)
-        sigma = self.sigma(out)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
-
-
-class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
-        super().__init__()
-        self.mu = nn.Sequential(
-            nn.Linear(dim_z, 2000),
-            nn.ReLU(),
-            nn.Linear(2000, 500),
-            nn.ReLU(),
-            nn.Linear(500, 500),
-            nn.ReLU(),
-            nn.Linear(500, dim_x)
-        )
-        self.log_sigma = nn.Parameter(torch.zeros(dim_x))
-
-    def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
-
-
 class VampPrior(lightning.LightningModule):
 
     def __init__(
@@ -103,8 +54,8 @@ class VampPrior(lightning.LightningModule):
             decoupled_variance: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
-            cluster_variance: float = 1.0,
             wishart_prior: bool = False,
+            wishart_expected_variance: float = 1.0,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -129,6 +80,7 @@ class VampPrior(lightning.LightningModule):
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
         self.wishart_prior = wishart_prior
+        self.wishart_expected_variance = wishart_expected_variance
 
         # global variational parameters (unconstrained)
         self.alpha_uc = nn.Parameter(
@@ -143,9 +95,9 @@ class VampPrior(lightning.LightningModule):
             utils.softplus_inverse(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
-        Lii = (cluster_variance * self.dim_z) ** -0.5 if self.wishart_prior else cluster_variance ** -0.5
+        # Lii = (cluster_variance * self.dim_z) ** -0.5 if self.wishart_prior else cluster_variance ** -0.5
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * utils.softplus_inverse(torch.as_tensor(Lii)),
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),# * utils.softplus_inverse(torch.as_tensor(Lii)),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
@@ -294,8 +246,8 @@ class VampPrior(lightning.LightningModule):
     def dkl_Lambda(self):
         if self.wishart_prior and self.kl_warmup == 0:
             n_q, V_q = self.n_and_V()
-            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device) / 0.25 ** 2
+            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) * self.wishart_expected_variance
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -347,85 +299,3 @@ class VampPrior(lightning.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
         return optimizer
-
-
-def collate(batch):
-    batch = list(map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}, batch))
-    batch = merge_with(torch.vstack, batch)
-    batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
-    batch['y'] = batch['y'].squeeze()
-    return batch
-
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
-    parser.add_argument('--max_epochs', type=int, default=1_000)
-    parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--truncation_level', type=int, default=100)
-
-    parser.add_argument('--categorical_prior', action='store_true', default=False)
-    parser.add_argument('--decoupled_variance', action='store_true', default=False)
-    parser.add_argument('--dirichlet_prior', action='store_true', default=False)
-    parser.add_argument('--dirichlet_process', action='store_true', default=False)
-    parser.add_argument('--wishart_prior', action='store_true', default=False)
-
-    args = parser.parse_args()
-
-    # random seed
-    if args.seed is not None:
-        torch.backends.cudnn.benchmark = False
-        torch.manual_seed(args.seed)
-
-    # load dataset
-    dataset = getattr(datasets, args.dataset)
-    ds_train = dataset(root='data', train=True, download=True, transform=ToTensor())
-    ds_test = dataset(root='data', train=False, download=True, transform=ToTensor())
-
-    # create dataloaders
-    dl_kwargs = {
-        'batch_size': args.batch_size,
-        'collate_fn': collate,
-        'drop_last': True,
-        'num_workers': 4,
-        'persistent_workers': True,
-        'pin_memory': False
-    }
-    dl_train = torch.utils.data.DataLoader(ds_train, shuffle=True, **dl_kwargs)
-    dl_test = torch.utils.data.DataLoader(ds_test, shuffle=False, **dl_kwargs)
-
-    # build model
-    data_dim = np.prod(ds_train[0][0].shape[1:])
-    model = VampPrior(
-        dim_x=data_dim,
-        dim_z=args.latent_dim,
-        num_data=len(ds_train),
-        encoder=Encoder,
-        decoder=Decoder,
-        u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
-        u_constraint=F.tanh,
-        truncation_level=args.truncation_level,
-        learning_rate=args.learning_rate,
-        categorical_prior=args.categorical_prior,
-        decoupled_variance=args.decoupled_variance,
-        dirichlet_prior=args.dirichlet_prior,
-        dirichlet_process=args.dirichlet_process,
-        wishart_prior=args.wishart_prior,
-    )
-
-    # train model
-    torch.set_float32_matmul_precision('high')
-    trainer = lightning.Trainer(
-        callbacks=[callbacks.EarlyStopping(monitor='nmi', patience=20, mode='max', verbose=True)],
-        devices=1,
-        enable_checkpointing=False,
-        logger=False,
-        max_epochs=args.max_epochs,
-        num_sanity_val_steps=0,
-    )
-    trainer.fit(model, dl_train, dl_test)
