@@ -15,7 +15,7 @@ from cytoolz.curried import partition
 from matplotlib.gridspec import GridSpec
 from vampprior_torch import VampPrior
 
-CLUSTER_STD = 0.4
+CLUSTER_STD = 1 / 3
 HIDDEN_DIM = 100
 TEST_CASES = {
     "VampPrior": dict(),
