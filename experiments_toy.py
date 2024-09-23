@@ -206,6 +206,8 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     ax.get_legend().remove()
 
     plt.tight_layout()
+
+    fig.savefig(figure)
     plt.show()
 
 
