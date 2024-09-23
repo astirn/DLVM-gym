@@ -13,7 +13,7 @@ import torch.utils.data as data
 from cytoolz import interleave, merge_with, pipe
 from cytoolz.curried import partition
 from matplotlib.gridspec import GridSpec
-from vampprior_torch import VampPrior
+from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100

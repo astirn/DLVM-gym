@@ -11,7 +11,7 @@ import torchvision.datasets as datasets
 from cytoolz import merge_with
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from vampprior_torch import VampPrior
+from vampprior_evolution import VampPrior
 
 
 class Encoder(nn.Module):
@@ -54,6 +54,7 @@ class Decoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
         return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
+
 
 def collate(batch):
     batch = list(map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}, batch))
