@@ -4,9 +4,20 @@ import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
-import utils_torch as utils
 
 from sklearn.metrics.cluster import normalized_mutual_info_score
+
+
+def multivariate_digamma(a: torch.Tensor, p: int) -> torch.Tensor:
+    return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
+
+
+def scale_tril(x: torch.Tensor) -> torch.Tensor:
+    return x.tril(-1) + (F.softplus(x.diagonal(dim1=-2, dim2=-1)) + 1e-5).diag_embed()
+
+
+def softplus_inverse(x: torch.Tensor) -> torch.Tensor:
+    return x + torch.log(-torch.expm1(-x))
 
 
 class ClusteringMetrics(torchmetrics.Metric):
@@ -92,7 +103,7 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
-            utils.softplus_inverse(self.dim_z * torch.ones(self.k)),
+            softplus_inverse(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
         # Lii = (cluster_variance * self.dim_z) ** -0.5 if self.wishart_prior else cluster_variance ** -0.5
@@ -161,7 +172,7 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior and self.kl_warmup == 0:
             n, V = self.n_and_V()
             log_det = (
-                    utils.multivariate_digamma(n / 2, self.dim_z) +
+                    multivariate_digamma(n / 2, self.dim_z) +
                     self.dim_z * torch.log(torch.as_tensor(2)) +
                     torch.linalg.slogdet(V).logabsdet
             )
@@ -177,7 +188,7 @@ class VampPrior(lightning.LightningModule):
         else:
             if self.kl_warmup == 1 and self.decoupled_variance:
                 L = torch.linalg.cholesky(pz_c.precision_matrix)
-                self.L_uc.data =  L.tril(-1) + utils.softplus_inverse(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
+                self.L_uc.data =  L.tril(-1) + softplus_inverse(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
             return pz_c.log_prob(z)
 
     def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
@@ -254,7 +265,7 @@ class VampPrior(lightning.LightningModule):
                     + n_q * (torch.einsum('bii->b', V_p_inv_V_q) - self.dim_z)
                     + 2 * torch.mvlgamma(n_p / 2, self.dim_z)
                     - 2 * torch.mvlgamma(n_q / 2, self.dim_z)
-                    + (n_q - n_p) * utils.multivariate_digamma(n_q / 2, self.dim_z)
+                    + (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z)
             ) / 2
             return dkl_Lambda.sum()
         else:
