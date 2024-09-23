@@ -13,7 +13,6 @@ import torch.utils.data as data
 from cytoolz import interleave, merge_with, pipe
 from cytoolz.curried import partition
 from matplotlib.gridspec import GridSpec
-from sklearn import datasets
 from vampprior_torch import VampPrior
 
 CLUSTER_STD = 0.4
@@ -64,9 +63,9 @@ class Decoder(nn.Module):
 
 
 def collate(batch):
-    batch = list(map(lambda b: {'x': b[0], 'y': b[1]}, batch))
+    batch = list(map(lambda b: {'x': b[0], 'c': b[1]}, batch))
     batch = merge_with(torch.vstack, batch)
-    batch['y'] = batch['y'].squeeze()
+    batch['c'] = batch['c'].squeeze()
     return batch
 
 
@@ -74,19 +73,18 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    if dataset == "blobs":
-        dataset = datasets.make_blobs(
-            centers=[[-2, 0], [2, 2], [2, -2]],
-            cluster_std=CLUSTER_STD,
-            n_samples=num_samples,
-            random_state=seed,
-        )
-        x, c = map(torch.Tensor, dataset)
-
-    elif dataset == "gmm":
+    if dataset == "anisotropic_gmm":
         k = torch.Size([3])
         centers = torch.as_tensor([[-2, 0], [2, 2], [2, -2]], dtype=torch.float32)
         widths = dist.Wishart(4, scale_tril=CLUSTER_STD ** 0.5 * torch.eye(2) / 2).sample(k)
+        c = dist.Categorical(logits=torch.ones(k)).sample(torch.Size([num_samples]))
+        x_c = dist.MultivariateNormal(centers, covariance_matrix=widths).sample(torch.Size([num_samples]))
+        x = torch.gather(x_c, dim=1, index=c[:, None, None].repeat([1, 1, 2])).squeeze()
+
+    elif dataset == "isotropic_gmm":
+        k = torch.Size([3])
+        centers = torch.as_tensor([[-2, 0], [2, 2], [2, -2]], dtype=torch.float32)
+        widths = torch.eye(2)[None].repeat([3, 1, 1]) * CLUSTER_STD
         c = dist.Categorical(logits=torch.ones(k)).sample(torch.Size([num_samples]))
         x_c = dist.MultivariateNormal(centers, covariance_matrix=widths).sample(torch.Size([num_samples]))
         x = torch.gather(x_c, dim=1, index=c[:, None, None].repeat([1, 1, 2])).squeeze()
@@ -100,123 +98,115 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
         x = torch.stack([(c - 0.5) - torch.cos(z), (c - 0.5) / 2 - torch.sin(z)], dim=1)
         epsilon = dist.MultivariateNormal(torch.zeros(2), scale_tril=torch.eye(2) * 0.05).sample(num_samples)
         x = x + epsilon
+
     else:
         raise NotImplementedError
 
     return data.TensorDataset(x, c)
 
 
-def fit_models(dataset: data.TensorDataset, base_dir: str, replace_results: bool, seed: int | None):
-    for name, config in TEST_CASES.items():
-        if seed is not None:
-            torch.manual_seed(seed)
+def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
 
-        checkpoint_file = f'{base_dir}/{name}/model.ckpt'
-        if not os.path.exists(checkpoint_file) or replace_results:
+    dataloader = data.DataLoader(
+        dataset,
+        batch_size=len(dataset),
+        collate_fn=collate,
+        shuffle=True
+    )
 
-            dataloader = data.DataLoader(
-                dataset,
-                batch_size=len(dataset),
-                collate_fn=collate,
-                shuffle=True
-            )
+    model = VampPrior(
+        dim_x=2,
+        dim_z=1,
+        num_data=len(dataset),
+        encoder=Encoder,
+        decoder=Decoder,
+        truncation_level=100,
+        learning_rate=5e-4,
+        u_initial=next(iter(dataloader))['x'][:100],
+        wishart_expected_variance=CLUSTER_STD ** 2,
+        **config
+    )
 
-            model = VampPrior(
-                dim_x=2,
-                dim_z=1,
-                num_data=len(dataset),
-                encoder=Encoder,
-                decoder=Decoder,
-                truncation_level=100,
-                learning_rate=5e-4,
-                u_initial=next(iter(dataloader))['x'][:100],
-                wishart_expected_variance=CLUSTER_STD ** 2,
-                **config
-            )
+    trainer = lightning.Trainer(
+        callbacks=[callbacks.EarlyStopping(
+            min_delta=0.01,
+            monitor='train_elbo',
+            mode='max',
+            patience=500,
+            verbose=True
+        )],
+        devices=1,
+        enable_checkpointing=False,
+        logger=False,
+        max_epochs=-1,
+        num_sanity_val_steps=0,
+    )
+    trainer.fit(model, train_dataloaders=dataloader)
+    trainer.save_checkpoint(model_path)
 
-            trainer = lightning.Trainer(
-                callbacks=[callbacks.EarlyStopping(
-                    min_delta=0.01,
-                    monitor='train_elbo',
-                    mode='max',
-                    patience=500,
-                    verbose=True
-                )],
-                devices=1,
-                enable_checkpointing=False,
-                logger=False,
-                max_epochs=-1,
-                num_sanity_val_steps=0,
-            )
-            trainer.fit(model, train_dataloaders=dataloader)
-            trainer.save_checkpoint(checkpoint_file)
-
-        torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
 
 
-def plot_results(dataset: data.TensorDataset, base_dir: str, seed: int | None):
-    for name, config in TEST_CASES.items():
-        if seed is not None:
-            torch.manual_seed(seed)
+def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
 
-        x = dataset.tensors[0]
+    x = dataset.tensors[0]
 
-        checkpoint_file = f'{base_dir}/{name}/model.ckpt'
-        if os.path.exists(checkpoint_file):
+    model = VampPrior.load_from_checkpoint(model_path)
 
-            model = VampPrior.load_from_checkpoint(checkpoint_file)
+    cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
+    cluster_assignments = cluster_probabilities.argmax(dim=1)
 
-            cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
-            cluster_assignments = cluster_probabilities.argmax(dim=1)
+    z_plot = torch.linspace(start=-30, end=30, steps=5000).unsqueeze(dim=1)
+    pc_model = model.pc()
+    pz_c_model = pc_model.probs * model.pz_c(z_plot)
+    pz_model = pz_c_model.sum(dim=1)
+    i_start = (pz_model > 1e-5).nonzero()[0]
+    i_stop = (pz_model > 1e-5).nonzero()[-1]
 
-            z_plot = torch.linspace(start=-30, end=30, steps=5000).unsqueeze(dim=1)
-            pc_model = model.pc()
-            pz_c_model = pc_model.probs * model.pz_c(z_plot)
-            pz_model = pz_c_model.sum(dim=1)
-            i_start = (pz_model > 1e-5).nonzero()[0]
-            i_stop = (pz_model > 1e-5).nonzero()[-1]
+    fig = plt.figure(figsize=(6, 10))
+    gs = GridSpec(4, 2, figure=fig)
 
-            fig = plt.figure(figsize=(6, 10))
-            fig.suptitle(name)
-            gs = GridSpec(4, 2, figure=fig)
+    palette = sns.color_palette('tab20c', n_colors=20) + sns.color_palette('tab20b', n_colors=20)
+    palette = pipe(palette, partition(4), interleave, list)
 
-            palette = sns.color_palette('tab20c', n_colors=20) + sns.color_palette('tab20b', n_colors=20)
-            palette = pipe(palette, partition(4), interleave, list)
+    ax = fig.add_subplot(gs[0, :])
+    ax.set_xlabel('z')
+    ax.set_xticks([])
+    ax.set_title('Mixture Density')
+    ax.set_ylabel('density')
+    ax.set_yticks([])
+    ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
 
-            ax = fig.add_subplot(gs[0, :])
-            ax.set_xlabel('z')
-            ax.set_xticks([])
-            ax.set_title('Mixture Density')
-            ax.set_ylabel('density')
-            ax.set_yticks([])
-            ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
+    ax = fig.add_subplot(gs[1, :])
+    ax.set_title('Scaled Component Densities')
+    ax.set_xlabel('z')
+    ax.set_xticks([])
+    ax.set_ylabel('density')
+    ax.set_yticks([])
+    sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=palette)
+    ax.get_legend().remove()
 
-            ax = fig.add_subplot(gs[1, :])
-            ax.set_title('Scaled Component Densities')
-            ax.set_xlabel('z')
-            ax.set_xticks([])
-            ax.set_ylabel('density')
-            ax.set_yticks([])
-            sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=palette)
-            ax.get_legend().remove()
+    ax = fig.add_subplot(gs[2:, :])
+    ax.set_title('Data Cluster Assignments')
+    ax.set_xlabel('$x_1$')
+    ax.set_xticks([])
+    ax.set_ylabel('$x_2$')
+    ax.set_yticks([])
+    sns.scatterplot(
+        x=x[:, 0],
+        y=x[:, 1],
+        hue=cluster_assignments,
+        hue_order=range(model.k),
+        palette=palette,
+    )
+    ax.get_legend().remove()
 
-            ax = fig.add_subplot(gs[2:, :])
-            ax.set_title('Data Cluster Assignments')
-            ax.set_xlabel('$x_1$')
-            ax.set_xticks([])
-            ax.set_ylabel('$x_2$')
-            ax.set_yticks([])
-            sns.scatterplot(
-                x=x[:, 0],
-                y=x[:, 1],
-                hue=cluster_assignments,
-                hue_order=range(model.k),
-                palette=palette,
-            )
-            ax.get_legend().remove()
-
-            plt.tight_layout()
-            plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -229,15 +219,20 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_dir = f'experiments/toy/{args.dataset}/{(args.seed)}'
+    experiment_dir = f'experiments/toy/{args.dataset}/{args.seed}'
     os.makedirs(experiment_dir, exist_ok=True)
+    results_dir = f'results/toy/{args.dataset}'
+    os.makedirs(results_dir, exist_ok=True)
 
     if args.seed is not None:
         torch.backends.cudnn.benchmark = False
     torch.set_float32_matmul_precision('high')
 
-    toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
+    data = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
-    fit_models(toy_data, experiment_dir, args.replace_results, args.seed)
-
-    plot_results(toy_data, experiment_dir, args.seed)
+    for model_name, model_config in TEST_CASES.items():
+        checkpoint = f'{experiment_dir}/{model_name}/model.ckpt'
+        if not os.path.exists(checkpoint) or args.replace_results:
+            fit_model(config=model_config, dataset=data, model_path=checkpoint, seed=args.seed)
+        figure = f'{results_dir}/{model_name}.pdf'
+        plot_results(dataset=data, fig_path=figure, model_path=checkpoint, seed=args.seed)
