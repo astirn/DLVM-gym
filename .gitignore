@@ -1,5 +1,5 @@
 .idea
+*.pdf
 data/
 experiments/
 lightning_logs/
-results/*.pdf
