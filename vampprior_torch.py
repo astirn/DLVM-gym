@@ -106,9 +106,11 @@ class VampPrior(lightning.LightningModule):
             softplus_inverse(self.dim_z * torch.ones(self.k)),
             requires_grad=self.wishart_prior
         )
-        # Lii = (cluster_variance * self.dim_z) ** -0.5 if self.wishart_prior else cluster_variance ** -0.5
+        Lii = self.wishart_expected_variance ** -0.5
+        if self.wishart_prior:
+            Lii *= self.dim_z ** -0.5
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1),# * utils.softplus_inverse(torch.as_tensor(Lii)),
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * softplus_inverse(torch.as_tensor(Lii)),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
