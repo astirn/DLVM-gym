@@ -122,7 +122,7 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        L = utils.scale_tril(self.L_uc)
+        L = scale_tril(self.L_uc)
         return n, L @ L.mT
 
     def pc(self):
