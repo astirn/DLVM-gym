@@ -57,10 +57,10 @@ class Decoder(nn.Module):
 
 
 def collate(batch):
-    batch = list(map(lambda b: {'x': b[0], 'y': torch.LongTensor([b[1]])}, batch))
+    batch = list(map(lambda b: {'x': b[0], 'c': torch.LongTensor([b[1]])}, batch))
     batch = merge_with(torch.vstack, batch)
     batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
-    batch['y'] = batch['y'].squeeze()
+    batch['c'] = batch['c'].squeeze()
     return batch
 
 
