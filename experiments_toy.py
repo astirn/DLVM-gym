@@ -15,7 +15,7 @@ from cytoolz.curried import partition
 from matplotlib.gridspec import GridSpec
 from vampprior_torch import VampPrior
 
-CLUSTER_STD = 1 / 3
+CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
 TEST_CASES = {
     "VampPrior": dict(),
@@ -26,6 +26,7 @@ TEST_CASES = {
     "VampPrior with DP priors": dict(dirichlet_process=True),
     "VampPrior with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
 }
+TRUNCATION_LEVEL = 40
 
 
 class Encoder(nn.Module):
@@ -122,9 +123,9 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         num_data=len(dataset),
         encoder=Encoder,
         decoder=Decoder,
-        truncation_level=100,
+        truncation_level=TRUNCATION_LEVEL,
         learning_rate=5e-4,
-        u_initial=next(iter(dataloader))['x'][:100],
+        u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
         wishart_expected_variance=CLUSTER_STD ** 2,
         **config
     )
@@ -207,8 +208,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
 
     plt.tight_layout()
 
-    fig.savefig(figure)
-    plt.show()
+    fig.savefig(fig_path)
 
 
 if __name__ == '__main__':
