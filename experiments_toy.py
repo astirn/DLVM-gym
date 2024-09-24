@@ -214,7 +214,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', type=str, default='custom')
+    parser.add_argument('--dataset', type=str, default='moons')
     parser.add_argument('--num_samples', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=12345)
     parser.add_argument('--replace_results', action='store_true')
