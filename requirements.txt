@@ -1,6 +1,7 @@
 cytoolz==0.12.3
 lightning==2.4.0
 matplotlib==3.9.2
+scanpy==1.10.3
 scikit-learn==1.5.2
 scvi-tools==1.1.6.post2
 seaborn==0.13.2
