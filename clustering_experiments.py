@@ -72,7 +72,6 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
     parser.add_argument('--learning_rate', type=float, default=2e-4)
-    parser.add_argument('--max_epochs', type=int, default=1_000)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
 
@@ -139,7 +138,7 @@ if __name__ == '__main__':
         devices=1,
         enable_checkpointing=False,
         logger=False,
-        max_epochs=args.max_epochs,
+        max_epochs=-1,
         num_sanity_val_steps=0,
     )
     trainer.fit(model, dl_train, dl_test)
