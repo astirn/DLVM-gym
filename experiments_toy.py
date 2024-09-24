@@ -13,19 +13,10 @@ import torch.utils.data as data
 from cytoolz import interleave, merge_with, pipe
 from cytoolz.curried import partition
 from matplotlib.gridspec import GridSpec
-from vampprior_evolution import VampPrior
+from vampprior_evolution import VampPrior, TEST_CASES
 
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
-TEST_CASES = {
-    "VampPrior": dict(),
-    "VampPrior with decoupled variance": dict(decoupled_variance=True),
-    "VampPrior with Wish. priors": dict(wishart_prior=True),
-    "VampPrior with Dir. priors": dict(dirichlet_prior=True),
-    "VampPrior with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
-    "VampPrior with DP priors": dict(dirichlet_process=True),
-    "VampPrior with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
-}
 TRUNCATION_LEVEL = 40
 
 

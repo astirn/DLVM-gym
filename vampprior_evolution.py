@@ -312,3 +312,14 @@ class VampPrior(lightning.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
         return optimizer
+
+
+TEST_CASES = {
+    "VampPrior": dict(),
+    "VampPrior with decoupled variance": dict(decoupled_variance=True),
+    "VampPrior with Wish. priors": dict(wishart_prior=True),
+    "VampPrior with Dir. priors": dict(dirichlet_prior=True),
+    "VampPrior with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
+    "VampPrior with DP priors": dict(dirichlet_process=True),
+    "VampPrior with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
+}
