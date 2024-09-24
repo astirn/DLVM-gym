@@ -63,13 +63,6 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
 
 
-def collate(batch):
-    batch = list(map(lambda b: {'x': b[0], 'c': b[1]}, batch))
-    batch = merge_with(torch.vstack, batch)
-    batch['c'] = batch['c'].squeeze()
-    return batch
-
-
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
@@ -104,6 +97,13 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
         raise NotImplementedError
 
     return data.TensorDataset(x, c)
+
+
+def collate(batch):
+    batch = list(map(lambda b: {'x': b[0], 'c': b[1]}, batch))
+    batch = merge_with(torch.vstack, batch)
+    batch['c'] = batch['c'].squeeze()
+    return batch
 
 
 def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: int | None):
