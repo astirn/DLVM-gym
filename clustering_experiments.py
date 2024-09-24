@@ -71,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=2e-4)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--truncation_level', type=int, default=100)
 
@@ -113,6 +113,7 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder,
         decoder=Decoder,
+        kl_warmup=5_000,
         u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
         u_constraint=F.tanh,
         truncation_level=args.truncation_level,
@@ -122,7 +123,7 @@ if __name__ == '__main__':
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
         wishart_prior=args.wishart_prior,
-        wishart_expected_variance=1.0 / 10 ** (1 / args.latent_dim)
+        wishart_expected_variance=0.5,
     )
 
     # train model
@@ -132,7 +133,7 @@ if __name__ == '__main__':
             min_delta=0.01,
             monitor='train_elbo',
             mode='max',
-            patience=20,
+            patience=100,
             verbose=True
         )],
         devices=1,

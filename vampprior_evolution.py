@@ -103,7 +103,7 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
-            softplus_inverse(self.dim_z * torch.ones(self.k)),
+            softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
         Lii = self.wishart_expected_variance ** -0.5
@@ -188,7 +188,7 @@ class VampPrior(lightning.LightningModule):
         elif self.decoupled_variance and self.kl_warmup == 0:
             return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
-            if self.kl_warmup == 1 and self.decoupled_variance:
+            if self.kl_warmup == 1:
                 L = torch.linalg.cholesky(pz_c.precision_matrix)
                 self.L_uc.data =  L.tril(-1) + softplus_inverse(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
             return pz_c.log_prob(z)
