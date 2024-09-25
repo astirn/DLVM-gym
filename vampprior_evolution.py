@@ -54,8 +54,8 @@ class VampPrior(lightning.LightningModule):
             dim_x: int,
             dim_z: int,
             num_data: int,
-            encoder: callable,
-            decoder: callable,
+            encoder: nn.Module,
+            decoder: nn.Module,
             learning_rate: float,
             truncation_level: int,
             kl_warmup: int = 0,
@@ -76,8 +76,8 @@ class VampPrior(lightning.LightningModule):
         self.dim_z = dim_z
         self.num_data = num_data
 
-        self.qz_x = encoder(self.dim_x, self.dim_z)
-        self.px_z = decoder(self.dim_x, self.dim_z)
+        self.qz_x = encoder
+        self.px_z = decoder
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
         self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
