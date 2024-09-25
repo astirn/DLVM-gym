@@ -117,6 +117,7 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=5e-4,
         u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
+        logarithmic_alpha_beta=True,
         wishart_expected_variance=CLUSTER_STD ** 2,
         **config
     )
