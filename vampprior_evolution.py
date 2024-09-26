@@ -58,7 +58,6 @@ class VampPrior(lightning.LightningModule):
             decoder: nn.Module,
             learning_rate: float,
             truncation_level: int,
-            kl_warmup: int = 0,
             u_initial: torch.Tensor = None,
             u_constraint: callable = None,
             categorical_prior: bool = False,
@@ -122,7 +121,6 @@ class VampPrior(lightning.LightningModule):
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
 
-        self.kl_warmup = kl_warmup
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
@@ -187,7 +185,7 @@ class VampPrior(lightning.LightningModule):
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
         pz_c = self.qz_x(self.u_constraint(self.u_uc))
-        if self.wishart_prior and self.kl_warmup == 0:
+        if self.wishart_prior:
             n, V = self.n_and_V()
             log_det = (
                     multivariate_digamma(n / 2, self.dim_z) +
@@ -201,12 +199,9 @@ class VampPrior(lightning.LightningModule):
                 torch.unsqueeze(residuals, dim=3)
             )
             return -0.5 * (self.dim_z * torch.log(torch.as_tensor(2 * torch.pi)) - log_det + quadratic)
-        elif self.decoupled_variance and self.kl_warmup == 0:
+        elif self.decoupled_variance:
             return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
-            if self.kl_warmup == 1:
-                L = torch.linalg.cholesky(pz_c.precision_matrix)
-                self.L_uc.data =  L.tril(-1) + softplus_inverse(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
             return pz_c.log_prob(z)
 
     def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
@@ -219,12 +214,12 @@ class VampPrior(lightning.LightningModule):
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
-        if self.categorical_prior and self.kl_warmup == 0:
+        if self.categorical_prior:
             log_probs -= torch.log(self.k)
         elif self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
             alpha, _ = self.alpha_and_beta()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
-        elif self.dirichlet_process and self.kl_warmup == 0:
+        elif self.dirichlet_process:
             log_v, log_vm1 = self.log_v_and_log_vm1()
             log_probs += log_v + torch.concat([torch.zeros_like(log_vm1)[:1], torch.cumsum(log_vm1, dim=0)[:-1]])
 
@@ -232,21 +227,21 @@ class VampPrior(lightning.LightningModule):
 
     def dkl_z(self, qz_x, qc_z, log_pz_c) -> torch.Tensor:
         dkl_z = -qz_x.entropy()
-        if (self.categorical_prior or self.dirichlet_prior or self.dirichlet_process) and self.kl_warmup == 0:
+        if self.categorical_prior or self.dirichlet_prior or self.dirichlet_process:
             dkl_z -= (qc_z.probs * log_pz_c).sum(dim=-1)
         else:
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
         return dkl_z.sum()
 
     def dkl_c(self, qc_z: dist.Categorical):
-        if self.categorical_prior and self.kl_warmup == 0:
+        if self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
         elif self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
             alpha, _ = self.alpha_and_beta()
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()
-        elif self.dirichlet_process and self.kl_warmup == 0:
+        elif self.dirichlet_process:
             log_v, log_vm1 = self.log_v_and_log_vm1()
             qc_gtj_z = torch.fliplr(torch.cumsum(torch.fliplr(qc_z.probs), dim=1)[:, :-1])
             qc_gtj_z = torch.concat([qc_gtj_z, torch.zeros_like(qc_gtj_z)[:, :1]], dim=1)
@@ -256,7 +251,7 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_pi(self):
-        if self.dirichlet_prior and self.kl_warmup == 0:
+        if self.dirichlet_prior:
             alpha, _ = self.alpha_and_beta()
             q = dist.Dirichlet(alpha)
             p = dist.Dirichlet(torch.ones_like(alpha) / self.k)
@@ -265,7 +260,7 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_v(self):
-        if self.dirichlet_process and self.kl_warmup == 0:
+        if self.dirichlet_process:
             q = dist.Beta(*self.alpha_and_beta())
             p = dist.Beta(1, 1)
             return dist.kl_divergence(q, p)[:-1].sum()
@@ -273,7 +268,7 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_Lambda(self, qz_x):
-        if self.wishart_prior and self.kl_warmup == 0:
+        if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
             # V_p_inv = torch.eye(self.dim_z).to(V_q.device) * self.wishart_expected_variance
@@ -308,7 +303,6 @@ class VampPrior(lightning.LightningModule):
             - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
-        self.kl_warmup = max(self.kl_warmup - 1, 0)
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
