@@ -67,7 +67,8 @@ class VampPrior(lightning.LightningModule):
             variational_dp: bool = False,
             logarithmic_alpha_beta: bool = False,
             wishart_prior: bool = False,
-            wishart_expected_variance: float = 1.0,
+            initial_alpha: float = 1.0,
+            initial_variance: float = 2.0,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -92,26 +93,36 @@ class VampPrior(lightning.LightningModule):
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
         self.wishart_prior = wishart_prior
-        self.wishart_expected_variance = wishart_expected_variance
 
         # global variational parameters (unconstrained)
         self.variational_dp = variational_dp
         self.logarithmic_alpha_beta = logarithmic_alpha_beta
+        alpha = torch.ones(self.k) * initial_alpha
         self.alpha_uc = nn.Parameter(
-            torch.log(torch.ones(self.k) * 2) if self.logarithmic_alpha_beta
-            else softplus_inverse(torch.ones(self.k) * 2),
+            torch.log(alpha) if self.logarithmic_alpha_beta else softplus_inverse(alpha),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
+
+        one_minus_v = 1 - 1 / self.k[None]
+        for i in range(1, self.k):
+            v = 1 / self.k / torch.prod(one_minus_v)
+            one_minus_v = torch.concat([one_minus_v, 1 - v[None]])
+        v = 1 - one_minus_v
+        v[-1] = 1
+        beta = alpha / v - alpha
+        beta[-1] = 1
+        # beta = beta / beta.max() * 10
+
         self.beta_uc = nn.Parameter(
-            torch.log(torch.arange(int(self.k), 0, -1)) if self.logarithmic_alpha_beta
-            else softplus_inverse(torch.arange(int(self.k), 0, -1)),
+            torch.log(beta) if self.logarithmic_alpha_beta else softplus_inverse(beta),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
-        Lii = self.wishart_expected_variance ** -0.5
+        # Lii = self.qz_x(self.u_constraint(self.u_uc)).scale_tril.diagonal(dim1=-2, dim2=-1).mean(dim=0)
+        Lii = initial_variance ** -0.5
         if self.wishart_prior:
             Lii *= self.dim_z ** -0.5
         self.L_uc = nn.Parameter(

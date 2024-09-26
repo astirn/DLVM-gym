@@ -113,9 +113,9 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
-        u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
+        # u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
         u_constraint=F.tanh,
-        truncation_level=args.truncation_level,
+        truncation_level=40,
         learning_rate=args.learning_rate,
         categorical_prior=args.categorical_prior,
         decoupled_variance=args.decoupled_variance,
@@ -124,7 +124,8 @@ if __name__ == '__main__':
         logarithmic_alpha_beta=True,
         variational_dp=False,
         wishart_prior=args.wishart_prior,
-        wishart_expected_variance=1.0,
+        initial_alpha=1.0, # lower -> eliminates clusters
+        initial_variance=2.0,
     )
 
     # train model
