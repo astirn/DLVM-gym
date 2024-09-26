@@ -102,7 +102,6 @@ class SingleCellVampPrior(VampPrior):
             - self.dkl_Lambda()  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
-        self.kl_warmup = max(self.kl_warmup - 1, 0)
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
