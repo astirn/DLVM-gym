@@ -228,5 +228,9 @@ if __name__ == '__main__':
         checkpoint = f'{experiment_dir}/{model_name}/model.ckpt'
         if not os.path.exists(checkpoint) or args.replace_results:
             fit_model(config=model_config, dataset=toy_dataset, model_path=checkpoint, seed=args.seed)
-        figure = f'{results_dir}/{model_name}.pdf'
-        plot_results(dataset=toy_dataset, fig_path=figure, model_path=checkpoint, seed=args.seed)
+        plot_results(
+            dataset=toy_dataset,
+            fig_path=f'{results_dir}/{model_name}.pdf',
+            model_path=checkpoint,
+            seed=args.seed
+        )
