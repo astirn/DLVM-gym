@@ -68,7 +68,6 @@ class VampPrior(lightning.LightningModule):
             logarithmic_alpha_beta: bool = False,
             wishart_prior: bool = False,
             initial_alpha: float = 1.0,
-            initial_variance: float = 2.0,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -121,12 +120,11 @@ class VampPrior(lightning.LightningModule):
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=self.wishart_prior
         )
-        # Lii = self.qz_x(self.u_constraint(self.u_uc)).scale_tril.diagonal(dim1=-2, dim2=-1).mean(dim=0)
-        Lii = initial_variance ** -0.5
+        Lii = self.qz_x(self.u_constraint(self.u_uc)).scale_tril.diagonal(dim1=-2, dim2=-1).mean(dim=0)
         if self.wishart_prior:
             Lii *= self.dim_z ** -0.5
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * softplus_inverse(torch.as_tensor(Lii)),
+            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * softplus_inverse(Lii),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
@@ -335,14 +333,3 @@ class VampPrior(lightning.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
         return optimizer
-
-
-TEST_CASES = {
-    "VampPrior": dict(),
-    "VampPrior with decoupled variance": dict(decoupled_variance=True),
-    "VampPrior with Wishart prior": dict(wishart_prior=True),
-    "VampPrior with Dirichlet prior": dict(dirichlet_prior=True),
-    "VampPrior with Dirichlet and Wishart priors": dict(dirichlet_prior=True, wishart_prior=True),
-    "VampPrior with DP prior": dict(dirichlet_process=True),
-    "VampPrior with DP and Wishart priors": dict(dirichlet_process=True, wishart_prior=True)
-}
