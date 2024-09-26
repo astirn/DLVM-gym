@@ -10,10 +10,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 
-from cytoolz import interleave, merge_with, pipe
-from cytoolz.curried import partition
+from constants import COLOR_PALETTE, TEST_CASES
+from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
-from vampprior_evolution import VampPrior, TEST_CASES
+from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
@@ -163,9 +163,6 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
 
-    palette = sns.color_palette('tab20c', n_colors=20) + sns.color_palette('tab20b', n_colors=20)
-    palette = pipe(palette, partition(4), interleave, list)
-
     ax = fig.add_subplot(gs[0, :])
     ax.set_xlabel('z')
     ax.set_xticks([])
@@ -180,7 +177,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     ax.set_xticks([])
     ax.set_ylabel('density')
     ax.set_yticks([])
-    sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=palette)
+    sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=COLOR_PALETTE)
     ax.get_legend().remove()
 
     ax = fig.add_subplot(gs[2:, :])
@@ -224,7 +221,8 @@ if __name__ == '__main__':
 
     toy_dataset = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
-    for model_name, model_config in TEST_CASES.items():
+    for model_config in TEST_CASES:
+        model_name = str(model_config)
         checkpoint = f'{experiment_dir}/{model_name}/model.ckpt'
         if not os.path.exists(checkpoint) or args.replace_results:
             fit_model(config=model_config, dataset=toy_dataset, model_path=checkpoint, seed=args.seed)
