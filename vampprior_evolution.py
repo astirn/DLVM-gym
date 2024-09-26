@@ -329,9 +329,9 @@ class VampPrior(lightning.LightningModule):
 TEST_CASES = {
     "VampPrior": dict(),
     "VampPrior with decoupled variance": dict(decoupled_variance=True),
-    "VampPrior with Wish. priors": dict(wishart_prior=True),
-    "VampPrior with Dir. priors": dict(dirichlet_prior=True),
-    "VampPrior with Dir. + Wish. priors": dict(dirichlet_prior=True, wishart_prior=True),
-    "VampPrior with DP priors": dict(dirichlet_process=True),
-    "VampPrior with DP + Wish. priors": dict(dirichlet_process=True, wishart_prior=True)
+    "VampPrior with Wishart prior": dict(wishart_prior=True),
+    "VampPrior with Dirichlet prior": dict(dirichlet_prior=True),
+    "VampPrior with Dirichlet and Wishart priors": dict(dirichlet_prior=True, wishart_prior=True),
+    "VampPrior with DP prior": dict(dirichlet_process=True),
+    "VampPrior with DP and Wishart priors": dict(dirichlet_process=True, wishart_prior=True)
 }
