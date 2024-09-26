@@ -191,7 +191,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
         y=x[:, 1],
         hue=cluster_assignments,
         hue_order=range(model.k),
-        palette=palette,
+        palette=COLOR_PALETTE,
     )
     ax.get_legend().remove()
 
