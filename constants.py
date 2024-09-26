@@ -13,8 +13,8 @@ COLOR_PALETTE = pipe(
 TEST_CASES = [
     dict(decoupled_variance=False),
     dict(decoupled_variance=True),
-    dict(dirichlet_prior=True, decoupled_variance=False),
-    dict(dirichlet_prior=True, decoupled_variance=True),
-    dict(dirichlet_process=True, decoupled_variance=False),
-    dict(dirichlet_process=True, decoupled_variance=True),
+    dict(decoupled_variance=False, dirichlet_prior=True),
+    dict(decoupled_variance=True, dirichlet_prior=True),
+    dict(decoupled_variance=False, dirichlet_process=True),
+    dict(decoupled_variance=True, dirichlet_process=True),
 ]
