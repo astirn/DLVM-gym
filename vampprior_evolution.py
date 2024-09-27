@@ -12,10 +12,6 @@ def multivariate_digamma(a: torch.Tensor, p: int) -> torch.Tensor:
     return torch.stack([torch.digamma(a + (1 - i) / 2) for i in range(1, p + 1)]).sum(dim=0)
 
 
-def scale_tril(x: torch.Tensor) -> torch.Tensor:
-    return x.tril(-1) + (F.softplus(x.diagonal(dim1=-2, dim2=-1)) + 1e-5).diag_embed()
-
-
 def softplus_inverse(x: torch.Tensor) -> torch.Tensor:
     return x + torch.log(-torch.expm1(-x))
 
@@ -125,7 +121,7 @@ class VampPrior(lightning.LightningModule):
             V = V / F.softplus(self.n_uc[0])
         L = torch.linalg.cholesky(V)
         self.L_uc = nn.Parameter(
-            L.tril(-1) + F.softplus(L.diagonal(dim1=-2, dim2=-1).diag_embed()),
+            L.tril(-1) + L.diagonal(dim1=-2, dim2=-1).log().diag_embed(),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
@@ -148,7 +144,7 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        L = scale_tril(self.L_uc)
+        L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp() + 1e-5).diag_embed()
         return n, L @ L.mT
 
     def pc(self):
