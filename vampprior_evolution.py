@@ -112,7 +112,7 @@ class VampPrior(lightning.LightningModule):
         )
         self.n_uc = nn.Parameter(
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
-            requires_grad=False
+            requires_grad=True
         )
         V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
         L = torch.linalg.cholesky(V)
@@ -271,7 +271,7 @@ class VampPrior(lightning.LightningModule):
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
             V_p_inv = n_p * self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix
-            # V_p_inv = V_p_inv * (self.pc().probs[:, None, None] * self.num_data + 1) ** (2 / self.dim_z)
+            # V_p_inv = V_p_inv * (self.pc().probs[:, None, None] * self.num_data + 1) ** (0.5 / self.dim_z)
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
