@@ -32,7 +32,7 @@ class Encoder(nn.Module):
         out = self.net(x)
         mu = self.mu(out)
         log_sigma = self.log_sigma(out)
-        return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(log_sigma.exp() + 1e-5))
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(log_sigma.exp() + 1e-5))
 
 
 class Decoder(nn.Module):
@@ -50,7 +50,7 @@ class Decoder(nn.Module):
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
+        return dist.Independent(dist.Normal(self.mu(x), self.log_sigma.exp()), 1)
 
 
 def collate(batch):
