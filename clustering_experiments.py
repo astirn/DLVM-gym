@@ -19,23 +19,20 @@ class Encoder(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 2000),
-            nn.ReLU(),
+            nn.ELU(),
         )
         self.mu = nn.Linear(2000, dim_z)
-        self.sigma = nn.Sequential(
-            nn.Linear(2000, dim_z),
-            nn.Softplus()
-        )
+        self.log_sigma = nn.Linear(2000, dim_z)
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = self.sigma(out)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+        log_sigma = self.log_sigma(out)
+        return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(log_sigma.exp() + 1e-5))
 
 
 class Decoder(nn.Module):
@@ -43,11 +40,11 @@ class Decoder(nn.Module):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(2000, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, dim_x)
         )
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
@@ -111,7 +108,7 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
-        # u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
+        # u_initial=2 * next(iter(dl_train))['x'][:50],
         u_constraint=F.tanh,
         truncation_level=50,
         learning_rate=5e-4,
