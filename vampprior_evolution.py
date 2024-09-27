@@ -138,7 +138,9 @@ class VampPrior(lightning.LightningModule):
         n = F.softplus(self.n_uc)
         L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp() + 1e-5).diag_embed()
         V = L @ L.mT
-        return n, V / n[:, None, None]
+        if self.wishart_prior:
+            V = V / n[:, None, None]
+        return n, V
 
     def pc(self):
         if self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
