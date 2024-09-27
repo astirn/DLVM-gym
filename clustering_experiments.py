@@ -119,8 +119,7 @@ if __name__ == '__main__':
         decoupled_variance=args.decoupled_variance,
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
-        logarithmic_alpha_beta=False,
-        variational_dp=False,
+        variational_dp=True,
         wishart_prior=args.wishart_prior,
         initial_alpha=1.0, # lower -> eliminates clusters
     )

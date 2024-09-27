@@ -61,7 +61,6 @@ class VampPrior(lightning.LightningModule):
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
             variational_dp: bool = False,
-            logarithmic_alpha_beta: bool = False,
             wishart_prior: bool = False,
             initial_alpha: float = 1.0,
     ):
@@ -91,10 +90,9 @@ class VampPrior(lightning.LightningModule):
 
         # global variational parameters (unconstrained)
         self.variational_dp = variational_dp
-        self.logarithmic_alpha_beta = logarithmic_alpha_beta
         alpha = torch.ones(self.k) * initial_alpha
         self.alpha_uc = nn.Parameter(
-            torch.log(alpha) if self.logarithmic_alpha_beta else softplus_inverse(alpha),
+            torch.log(alpha),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
 
@@ -109,7 +107,7 @@ class VampPrior(lightning.LightningModule):
         # beta = beta / beta.max() * 10
 
         self.beta_uc = nn.Parameter(
-            torch.log(beta) if self.logarithmic_alpha_beta else softplus_inverse(beta),
+            torch.log(beta),
             requires_grad=self.dirichlet_process
         )
         self.n_uc = nn.Parameter(
@@ -130,12 +128,8 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
-        if self.logarithmic_alpha_beta:
-            alpha = self.alpha_uc.exp()
-            beta = self.beta_uc.exp()
-        else:
-            alpha = F.softplus(self.alpha_uc)
-            beta = F.softplus(self.beta_uc)
+        alpha = self.alpha_uc.exp()
+        beta = self.beta_uc.exp()
 
         if not self.variational_dp:
             beta = torch.concat([alpha[1:].cumsum(dim=0), torch.as_tensor([1]).to(alpha.device)])
