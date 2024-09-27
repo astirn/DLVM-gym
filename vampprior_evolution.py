@@ -280,9 +280,10 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            # V_p_inv = torch.eye(self.dim_z).to(V_q.device) * self.wishart_expected_variance
-            with torch.no_grad():
-                V_p_inv = qz_x.covariance_matrix.mean(dim=0) * (self.num_data / self.k) ** (1 / self.dim_z)
+            V_p_inv = torch.eye(self.dim_z).to(V_q.device) * self.wishart_expected_variance
+            V_p_inv = n_p * self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix
+            # V_p_inv *= (self.pc().probs[:, None, None] * self.num_data + 1) ** (2 / self.dim_z)
+            # V_p_inv *= self.k ** (2 / self.dim_z)
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
