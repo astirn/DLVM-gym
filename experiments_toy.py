@@ -32,7 +32,7 @@ class Encoder(nn.Module):
         out = self.net(x)
         mu = self.mu(out)
         log_sigma = self.log_sigma(out)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(log_sigma.exp()))
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(log_sigma.exp() + 1e-5))
 
 
 class Decoder(nn.Module):
