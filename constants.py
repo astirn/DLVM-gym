@@ -17,9 +17,9 @@ TEST_CASES = [
 
     dict(dirichlet_prior=True),
     dict(dirichlet_prior=True, decoupled_variance=True),
-    # dict(dirichlet_prior=True, wishart_prior=True),
+    dict(dirichlet_prior=True, wishart_prior=True),
 
     dict(dirichlet_process=True),
     dict(dirichlet_process=True, decoupled_variance=True),
-    # dict(dirichlet_process=True, wishart_prior=True),
+    dict(dirichlet_process=True, wishart_prior=True),
 ]
