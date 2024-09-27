@@ -118,13 +118,14 @@ class VampPrior(lightning.LightningModule):
         )
         self.n_uc = nn.Parameter(
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
-            requires_grad=self.wishart_prior
+            requires_grad=False
         )
-        Lii = self.qz_x(self.u_constraint(self.u_uc)).scale_tril.diagonal(dim1=-2, dim2=-1).mean(dim=0)
+        V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
         if self.wishart_prior:
-            Lii *= self.dim_z ** -0.5
+            V = V / F.softplus(self.n_uc[0])
+        L = torch.linalg.cholesky(V)
         self.L_uc = nn.Parameter(
-            torch.eye(self.dim_z)[None].repeat(int(self.k), 1, 1) * softplus_inverse(Lii),
+            L.tril(-1) + F.softplus(L.diagonal(dim1=-2, dim2=-1).diag_embed()),
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
@@ -276,14 +277,12 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, qz_x):
+    def dkl_Lambda(self):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            V_p_inv = torch.eye(self.dim_z).to(V_q.device) * self.wishart_expected_variance
             V_p_inv = n_p * self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix
-            # V_p_inv *= (self.pc().probs[:, None, None] * self.num_data + 1) ** (2 / self.dim_z)
-            # V_p_inv *= self.k ** (2 / self.dim_z)
+            # V_p_inv = V_p_inv * (self.pc().probs[:, None, None] * self.num_data + 1) ** (2 / self.dim_z)
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
@@ -311,7 +310,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
+            - self.dkl_Lambda()  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
