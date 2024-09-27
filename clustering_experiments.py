@@ -71,9 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--truncation_level', type=int, default=100)
 
     parser.add_argument('--categorical_prior', action='store_true', default=False)
     parser.add_argument('--decoupled_variance', action='store_true', default=False)
@@ -115,17 +113,16 @@ if __name__ == '__main__':
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
         # u_initial=2 * next(iter(dl_train))['x'][:args.truncation_level],
         u_constraint=F.tanh,
-        truncation_level=40,
-        learning_rate=args.learning_rate,
+        truncation_level=50,
+        learning_rate=5e-4,
         categorical_prior=args.categorical_prior,
         decoupled_variance=args.decoupled_variance,
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
-        logarithmic_alpha_beta=True,
+        logarithmic_alpha_beta=False,
         variational_dp=False,
         wishart_prior=args.wishart_prior,
         initial_alpha=1.0, # lower -> eliminates clusters
-        initial_variance=2.0,
     )
 
     # train model

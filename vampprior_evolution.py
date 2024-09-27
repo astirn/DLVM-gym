@@ -331,5 +331,23 @@ class VampPrior(lightning.LightningModule):
         self.clustering_metrics.reset()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, maximize=True)
-        return optimizer
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.learning_rate,
+            maximize=True,
+            weight_decay=0,
+        )
+
+        # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        #     optimizer=optimizer,
+        #     max_lr=self.learning_rate,
+        #     epochs=250,
+        #     steps_per_epoch=1,
+        #     pct_start=0.3,
+        #     three_phase=False,
+        # )
+
+        return dict(
+            optimizer=optimizer,
+            # lr_scheduler=dict(scheduler=lr_scheduler, interval='epoch')
+        )
