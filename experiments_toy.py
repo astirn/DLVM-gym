@@ -1,6 +1,4 @@
 import argparse
-import lightning
-import lightning.pytorch.callbacks as callbacks
 import matplotlib.pyplot as plt
 import os
 import seaborn as sns
@@ -13,6 +11,7 @@ import torch.utils.data as data
 from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
+from utils import get_trainer
 from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
@@ -122,20 +121,7 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         **config
     )
 
-    trainer = lightning.Trainer(
-        callbacks=[callbacks.EarlyStopping(
-            min_delta=0.01,
-            monitor='train_elbo',
-            mode='max',
-            patience=500,
-            verbose=True
-        )],
-        devices=1,
-        enable_checkpointing=False,
-        logger=False,
-        max_epochs=-1,
-        num_sanity_val_steps=0,
-    )
+    trainer = get_trainer(checkpoint_metrics=['train_elbo'], checkpoint_dir=os.path.dirname(model_path))
     trainer.fit(model, train_dataloaders=dataloader)
     trainer.save_checkpoint(model_path)
 
@@ -223,7 +209,7 @@ if __name__ == '__main__':
 
     for model_config in TEST_CASES:
         model_name = str(model_config)
-        checkpoint = f'{experiment_dir}/{model_name}/model.ckpt'
+        checkpoint = f'{experiment_dir}/{model_name}/best_train_elbo.ckpt'
         if not os.path.exists(checkpoint) or args.replace_results:
             fit_model(config=model_config, dataset=toy_dataset, model_path=checkpoint, seed=args.seed)
         plot_results(
