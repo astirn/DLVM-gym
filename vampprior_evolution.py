@@ -115,8 +115,6 @@ class VampPrior(lightning.LightningModule):
             requires_grad=False
         )
         V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
-        if self.wishart_prior:
-            V = V / F.softplus(self.n_uc[0])
         L = torch.linalg.cholesky(V)
         self.L_uc = nn.Parameter(
             L.tril(-1) + L.diagonal(dim1=-2, dim2=-1).log().diag_embed(),
@@ -139,7 +137,8 @@ class VampPrior(lightning.LightningModule):
     def n_and_V(self):
         n = F.softplus(self.n_uc)
         L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp() + 1e-5).diag_embed()
-        return n, L @ L.mT
+        V = L @ L.mT
+        return n, V / n[:, None, None]
 
     def pc(self):
         if self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
