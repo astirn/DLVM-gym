@@ -5,7 +5,6 @@ import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data as data
 
 from constants import COLOR_PALETTE, TEST_CASES
@@ -27,16 +26,13 @@ class Encoder(nn.Module):
             nn.Tanh(),
         )
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
-        self.sigma = nn.Sequential(
-            nn.Linear(HIDDEN_DIM, dim_z),
-            nn.Softplus()
-        )
+        self.log_sigma = nn.Linear(HIDDEN_DIM, dim_z)
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = self.sigma(out)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+        log_sigma = self.log_sigma(out)
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(log_sigma.exp()))
 
 
 class Decoder(nn.Module):
@@ -50,7 +46,7 @@ class Decoder(nn.Module):
         self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), F.softplus(self.log_sigma)), 1)
+        return dist.Independent(dist.Normal(self.mu(x), self.log_sigma.exp()), 1)
 
 
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
@@ -114,10 +110,10 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         encoder=Encoder(dim_x=2, dim_z=1),
         decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
-        learning_rate=5e-4,
-        u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
+        learning_rate=1e-3,
+        # u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
         logarithmic_alpha_beta=True,
-        wishart_expected_variance=CLUSTER_STD ** 2,
+        variational_dp=True,
         **config
     )
 
