@@ -135,7 +135,7 @@ class VampPrior(lightning.LightningModule):
 
     def n_and_V(self):
         n = F.softplus(self.n_uc)
-        L = self.L_uc.tril(-1) + (self.L_uc.diagonal(dim1=-2, dim2=-1).exp() + 1e-5).diag_embed()
+        L = self.L_uc.tril(-1) + torch.clamp_max(self.L_uc.diagonal(dim1=-2, dim2=-1).exp(), 100).diag_embed()
         V = L @ L.mT
         if self.wishart_prior:
             V = V / n[:, None, None]
