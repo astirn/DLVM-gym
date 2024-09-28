@@ -104,7 +104,6 @@ class VampPrior(lightning.LightningModule):
         v[-1] = 1
         beta = alpha / v - alpha
         beta[-1] = 1
-        # beta = beta / beta.max() * 10
 
         self.beta_uc = nn.Parameter(
             torch.log(beta),
@@ -126,8 +125,8 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
-        alpha = self.alpha_uc.exp()
-        beta = self.beta_uc.exp()
+        alpha = torch.clamp_min(self.alpha_uc.exp(), 1 / self.k)
+        beta = torch.clamp_min(self.beta_uc.exp(), 1 / self.k)
 
         if not self.variational_dp:
             beta = torch.concat([alpha[1:].cumsum(dim=0), torch.as_tensor([1]).to(alpha.device)])
