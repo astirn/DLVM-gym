@@ -16,11 +16,12 @@ from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
+LEARNING_RATE = 1e-3
 TRUNCATION_LEVEL = 40
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, HIDDEN_DIM),
@@ -28,16 +29,17 @@ class Encoder(nn.Module):
         )
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
         self.sigma_uc = nn.Linear(HIDDEN_DIM, dim_z)
+        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
+        sigma = torch.clamp_min(self.sigma_constraint(self.sigma_uc(out)), MIN_STD)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, HIDDEN_DIM),
@@ -45,10 +47,11 @@ class Decoder(nn.Module):
             nn.Linear(HIDDEN_DIM, dim_x),
         )
         self.sigma_uc = nn.Parameter(torch.ones(dim_x))
+        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
-        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
+        sigma = self.sigma_constraint(self.sigma_uc)
+        return dist.Independent(dist.Normal(self.mu(x), torch.clamp_min(sigma, MIN_STD)), 1)
 
 
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
@@ -109,10 +112,10 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         dim_x=2,
         dim_z=1,
         num_data=len(dataset),
-        encoder=Encoder(dim_x=2, dim_z=1),
-        decoder=Decoder(dim_x=2, dim_z=1),
+        encoder=Encoder(dim_x=2, dim_z=1, sigma_constraint=F.softplus),
+        decoder=Decoder(dim_x=2, dim_z=1, sigma_constraint=F.softplus),
         truncation_level=TRUNCATION_LEVEL,
-        learning_rate=1e-3,
+        learning_rate=LEARNING_RATE,
         # u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
         variational_dp=True,
         **config
