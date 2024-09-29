@@ -16,7 +16,7 @@ from vampprior_evolution import VampPrior
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
@@ -27,7 +27,8 @@ class Encoder(nn.Module):
             nn.ELU(),
         )
         self.mu = nn.Linear(2000, dim_z)
-        self.log_sigma = nn.Linear(2000, dim_z)
+        self.sigma_uc = nn.Linear(2000, dim_z)
+        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)

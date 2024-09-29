@@ -123,7 +123,6 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
 
     trainer = get_trainer(checkpoint_metrics=['train_elbo'], checkpoint_dir=os.path.dirname(model_path))
     trainer.fit(model, train_dataloaders=dataloader)
-    trainer.save_checkpoint(model_path)
 
     torch.cuda.empty_cache()
 
@@ -134,7 +133,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
 
     x = dataset.tensors[0]
 
-    model = VampPrior.load_from_checkpoint(model_path)
+    model = VampPrior.load_from_checkpoint(model_path, map_location='cpu')
 
     cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
     cluster_assignments = cluster_probabilities.argmax(dim=1)
@@ -211,7 +210,12 @@ if __name__ == '__main__':
         model_name = str(model_config)
         checkpoint = f'{experiment_dir}/{model_name}/best_train_elbo.ckpt'
         if not os.path.exists(checkpoint) or args.replace_results:
-            fit_model(config=model_config, dataset=toy_dataset, model_path=checkpoint, seed=args.seed)
+            fit_model(
+                config=model_config,
+                dataset=toy_dataset,
+                model_path=f'{experiment_dir}/{model_name}/',
+                seed=args.seed
+            )
         plot_results(
             dataset=toy_dataset,
             fig_path=f'{results_dir}/{model_name}.pdf',
