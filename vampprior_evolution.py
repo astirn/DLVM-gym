@@ -87,15 +87,15 @@ class VampPrior(lightning.LightningModule):
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
         self.wishart_prior = wishart_prior
-
-        # global variational parameters (unconstrained)
         self.variational_dp = variational_dp
+
+
+        # global variational parameters for cluster proportions
         alpha = torch.ones(self.k) * initial_alpha
         self.alpha_uc = nn.Parameter(
             softplus_inverse(alpha),
             requires_grad=self.dirichlet_prior or self.dirichlet_process
         )
-
         one_minus_v = 1 - 1 / self.k[None]
         for i in range(1, self.k):
             v = 1 / self.k / torch.prod(one_minus_v)
