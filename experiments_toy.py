@@ -3,11 +3,12 @@ import matplotlib.pyplot as plt
 import os
 import seaborn as sns
 import torch
+import torch.nn.functional as F
 import torch.distributions as dist
 import torch.nn as nn
 import torch.utils.data as data
 
-from constants import COLOR_PALETTE, TEST_CASES
+from constants import COLOR_PALETTE, MIN_STD, TEST_CASES
 from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
 from utils import get_trainer
@@ -26,13 +27,13 @@ class Encoder(nn.Module):
             nn.Tanh(),
         )
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
-        self.log_sigma = nn.Linear(HIDDEN_DIM, dim_z)
+        self.sigma_uc = nn.Linear(HIDDEN_DIM, dim_z)
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        log_sigma = self.log_sigma(out)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(log_sigma.exp() + 1e-5))
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
@@ -43,10 +44,11 @@ class Decoder(nn.Module):
             nn.Tanh(),
             nn.Linear(HIDDEN_DIM, dim_x),
         )
-        self.log_sigma = nn.Parameter(torch.zeros(dim_x))
+        self.sigma_uc = nn.Parameter(torch.ones(dim_x))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), self.log_sigma.exp()), 1)
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
+        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
 
 
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
