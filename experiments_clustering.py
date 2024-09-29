@@ -112,7 +112,7 @@ if __name__ == '__main__':
         # u_initial=2 * next(iter(dl_train))['x'][:50],
         u_constraint=F.tanh,
         truncation_level=50,
-        learning_rate=5e-4,
+        learning_rate=3e-4,
         categorical_prior=args.categorical_prior,
         decoupled_variance=args.decoupled_variance,
         dirichlet_prior=args.dirichlet_prior,
