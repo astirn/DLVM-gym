@@ -90,12 +90,9 @@ class VampPrior(lightning.LightningModule):
         self.variational_dp = variational_dp
 
 
-        # global variational parameters for cluster proportions
+        # variational parameters for cluster proportions
         alpha = torch.ones(self.k) * initial_alpha
-        self.alpha_uc = nn.Parameter(
-            softplus_inverse(alpha),
-            requires_grad=self.dirichlet_prior or self.dirichlet_process
-        )
+        self.alpha_uc = nn.Parameter(alpha.log(), requires_grad=self.dirichlet_prior or self.dirichlet_process)
         one_minus_v = 1 - 1 / self.k[None]
         for i in range(1, self.k):
             v = 1 / self.k / torch.prod(one_minus_v)
@@ -104,12 +101,12 @@ class VampPrior(lightning.LightningModule):
         v[-1] = 1
         beta = alpha / v - alpha
         beta[-1] = 1
+        self.beta_uc = nn.Parameter(beta.log(), requires_grad=self.dirichlet_process)
 
         self.n_uc = nn.Parameter(
             softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
             requires_grad=True
         )
-        self.beta_uc = nn.Parameter(softplus_inverse(beta), requires_grad=self.dirichlet_process)
         V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
         L = torch.linalg.cholesky(V)
         self.L_uc = nn.Parameter(
@@ -122,8 +119,8 @@ class VampPrior(lightning.LightningModule):
         self.learning_rate = learning_rate
 
     def alpha_and_beta(self):
-        alpha = F.softplus(self.alpha_uc)
-        beta = F.softplus(self.beta_uc)
+        alpha = self.alpha_uc.exp()
+        beta = self.beta_uc.exp()
 
         if not self.variational_dp:
             beta = torch.concat([alpha[1:].cumsum(dim=0), torch.as_tensor([1]).to(alpha.device)])
