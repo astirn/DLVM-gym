@@ -57,7 +57,6 @@ class VampPrior(lightning.LightningModule):
             dirichlet_process: bool = False,
             dirichlet_process_variational_family: bool = False,
             wishart_prior: bool = False,
-            wishart_variational_family_initial_variance: float = 0.5,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
