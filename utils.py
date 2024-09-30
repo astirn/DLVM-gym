@@ -1,7 +1,7 @@
 import lightning
 import lightning.pytorch.callbacks as callbacks
 
-def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str) -> lightning.Trainer:
+def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> lightning.Trainer:
 
     metric_checkpoint_callbacks = [
         callbacks.ModelCheckpoint(
