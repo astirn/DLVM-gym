@@ -166,9 +166,9 @@ class VampPrior(lightning.LightningModule):
             ll = (
                 + torch.lgamma((nu + self.dim_z) / 2)
                 - torch.lgamma(nu / 2)
-                - 0.5 * (nu * torch.pi).log()
+                - 0.5 * self.dim_z * (nu * torch.pi).log()
                 + 0.5 * Lambda.slogdet().logabsdet
-                - 0.5 * (nu + self.dim_z) * (1 + quadratic / nu)
+                - 0.5 * (nu + self.dim_z) * (1 + quadratic / nu).log()
             )
             return ll.exp()
         else:
