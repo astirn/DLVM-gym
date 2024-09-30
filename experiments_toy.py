@@ -118,7 +118,11 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         **config
     )
 
-    trainer = get_trainer(checkpoint_metrics=['train_elbo'], checkpoint_dir=os.path.dirname(model_path))
+    trainer = get_trainer(
+        checkpoint_metrics=['train_elbo'],
+        checkpoint_dir=os.path.dirname(model_path),
+        patience=1_000,
+    )
     trainer.fit(model, train_dataloaders=dataloader)
 
     torch.cuda.empty_cache()

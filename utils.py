@@ -3,7 +3,11 @@ import lightning.pytorch.callbacks as callbacks
 import torch
 
 
-def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> lightning.Trainer:
+def get_trainer(
+        checkpoint_metrics: list[str],
+        checkpoint_dir: str | None,
+        patience: int,
+) -> lightning.Trainer:
 
     metric_checkpoint_callbacks = [
         callbacks.ModelCheckpoint(
@@ -25,7 +29,7 @@ def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> li
                 min_delta=0.01,
                 monitor='train_elbo',
                 mode='max',
-                patience=500,
+                patience=patience,
                 verbose=True
             ),
         ] + metric_checkpoint_callbacks,
