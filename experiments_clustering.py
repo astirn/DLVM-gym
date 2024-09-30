@@ -12,7 +12,7 @@ from cytoolz import merge_with
 from constants import MIN_STD, TEST_CASES
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from utils import get_trainer
+from utils import get_trainer, softplus_inverse
 from vampprior_evolution import VampPrior
 
 

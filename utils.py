@@ -1,5 +1,7 @@
 import lightning
 import lightning.pytorch.callbacks as callbacks
+import torch
+
 
 def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> lightning.Trainer:
 
@@ -35,3 +37,7 @@ def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> li
         max_epochs=-1,
         num_sanity_val_steps=0,
     )
+
+
+def softplus_inverse(x: torch.Tensor) -> torch.Tensor:
+    return x + torch.log(-torch.expm1(-x))
