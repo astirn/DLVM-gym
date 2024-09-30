@@ -12,6 +12,7 @@ from cytoolz import merge_with
 from constants import MIN_STD, TEST_CASES
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
+from utils import get_trainer
 from vampprior_evolution import VampPrior
 
 
@@ -127,18 +128,5 @@ if __name__ == '__main__':
 
     # train model
     torch.set_float32_matmul_precision('high')
-    trainer = lightning.Trainer(
-        callbacks=[callbacks.EarlyStopping(
-            min_delta=0.01,
-            monitor='train_elbo',
-            mode='max',
-            patience=100,
-            verbose=True
-        )],
-        devices=1,
-        enable_checkpointing=False,
-        logger=False,
-        max_epochs=-1,
-        num_sanity_val_steps=0,
-    )
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None)
     trainer.fit(model, dl_train, dl_test)
