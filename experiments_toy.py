@@ -46,7 +46,7 @@ class Decoder(nn.Module):
             nn.Tanh(),
             nn.Linear(HIDDEN_DIM, dim_x),
         )
-        self.sigma_uc = nn.Parameter(torch.ones(dim_x))
+        self.sigma_uc = nn.Parameter(torch.zeros(dim_x))
         self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
@@ -112,8 +112,8 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         dim_x=2,
         dim_z=1,
         num_data=len(dataset),
-        encoder=Encoder(dim_x=2, dim_z=1, sigma_constraint=F.softplus),
-        decoder=Decoder(dim_x=2, dim_z=1, sigma_constraint=F.softplus),
+        encoder=Encoder(dim_x=2, dim_z=1, sigma_constraint=torch.exp),
+        decoder=Decoder(dim_x=2, dim_z=1, sigma_constraint=torch.exp),
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
         # u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
@@ -142,8 +142,8 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     pc_model = model.pc()
     pz_c_model = pc_model.probs * model.pz_c(z_plot)
     pz_model = pz_c_model.sum(dim=1)
-    i_start = (pz_model > 1e-5).nonzero()[0]
-    i_stop = (pz_model > 1e-5).nonzero()[-1]
+    i_start = (pz_model > 1e-3).nonzero()[0]
+    i_stop = (pz_model > 1e-3).nonzero()[-1]
 
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
