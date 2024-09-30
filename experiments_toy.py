@@ -11,7 +11,7 @@ import torch.utils.data as data
 from constants import COLOR_PALETTE, MIN_STD, TEST_CASES
 from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
-from utils import get_trainer
+from utils import get_trainer, softplus_inverse
 from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
@@ -21,7 +21,7 @@ TRUNCATION_LEVEL = 40
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
+    def __init__(self, dim_x: int, dim_z: int,):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, HIDDEN_DIM),
@@ -29,29 +29,27 @@ class Encoder(nn.Module):
         )
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
         self.sigma_uc = nn.Linear(HIDDEN_DIM, dim_z)
-        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(self.sigma_constraint(self.sigma_uc(out)), MIN_STD)
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
+    def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, HIDDEN_DIM),
             nn.Tanh(),
             nn.Linear(HIDDEN_DIM, dim_x),
         )
-        self.sigma_uc = nn.Parameter(torch.zeros(dim_x))
-        self.sigma_constraint = sigma_constraint
+        self.sigma_uc = nn.Parameter(softplus_inverse(torch.ones(dim_x)))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        sigma = self.sigma_constraint(self.sigma_uc)
-        return dist.Independent(dist.Normal(self.mu(x), torch.clamp_min(sigma, MIN_STD)), 1)
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
+        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
 
 
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
@@ -112,8 +110,8 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         dim_x=2,
         dim_z=1,
         num_data=len(dataset),
-        encoder=Encoder(dim_x=2, dim_z=1, sigma_constraint=torch.exp),
-        decoder=Decoder(dim_x=2, dim_z=1, sigma_constraint=torch.exp),
+        encoder=Encoder(dim_x=2, dim_z=1),
+        decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
         dirichlet_process_variational_family=True,

@@ -17,7 +17,7 @@ from vampprior_evolution import VampPrior
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
+    def __init__(self, dim_x: int, dim_z: int,):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
@@ -29,17 +29,16 @@ class Encoder(nn.Module):
         )
         self.mu = nn.Linear(2000, dim_z)
         self.sigma_uc = nn.Linear(2000, dim_z)
-        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(self.sigma_constraint(self.sigma_uc(out)), MIN_STD)
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
+    def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
@@ -51,11 +50,10 @@ class Decoder(nn.Module):
             nn.Linear(500, dim_x)
         )
         self.sigma_uc = nn.Parameter(torch.zeros(dim_x))
-        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        sigma = self.sigma_constraint(self.sigma_uc)
-        return dist.Independent(dist.Normal(self.mu(x), torch.clamp_min(sigma, MIN_STD)), 1)
+        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
+        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
 
 
 def collate(batch):
@@ -111,8 +109,8 @@ if __name__ == '__main__':
         dim_x=data_dim,
         dim_z=args.latent_dim,
         num_data=len(ds_train),
-        encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim, sigma_constraint=torch.exp),
-        decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim, sigma_constraint=torch.exp),
+        encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
+        decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
         u_constraint=F.tanh,
         truncation_level=50,
         learning_rate=5e-4,
