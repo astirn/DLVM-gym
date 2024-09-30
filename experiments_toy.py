@@ -114,7 +114,6 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
-        dirichlet_process_variational_family=True,
         **config
     )
 
@@ -123,6 +122,7 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         checkpoint_dir=os.path.dirname(model_path),
         patience=1_000,
     )
+    torch.set_float32_matmul_precision('high')
     trainer.fit(model, train_dataloaders=dataloader)
 
     torch.cuda.empty_cache()
@@ -151,11 +151,10 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
 
     ax = fig.add_subplot(gs[0, :])
     ax.set_xlabel('z')
-    ax.set_xticks([])
     ax.set_title('Mixture Density')
     ax.set_ylabel('density')
     ax.set_yticks([])
-    ax.plot(pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
+    ax.plot(z_plot[i_start:i_stop], pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
 
     ax = fig.add_subplot(gs[1, :])
     ax.set_title('Scaled Component Densities')
@@ -200,10 +199,6 @@ if __name__ == '__main__':
     os.makedirs(experiment_dir, exist_ok=True)
     results_dir = f'results/toy/{args.dataset}'
     os.makedirs(results_dir, exist_ok=True)
-
-    if args.seed is not None:
-        torch.backends.cudnn.benchmark = False
-    torch.set_float32_matmul_precision('high')
 
     toy_dataset = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
