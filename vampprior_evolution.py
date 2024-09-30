@@ -54,15 +54,13 @@ class VampPrior(lightning.LightningModule):
             decoder: nn.Module,
             learning_rate: float,
             truncation_level: int,
-            u_initial: torch.Tensor = None,
             u_constraint: callable = None,
             categorical_prior: bool = False,
             decoupled_variance: bool = False,
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
-            variational_dp: bool = False,
+            dirichlet_process_variational_family: bool = False,
             wishart_prior: bool = False,
-            initial_alpha: float = 1.0,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -77,21 +75,17 @@ class VampPrior(lightning.LightningModule):
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
         self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
-        self.u_uc = nn.Parameter(
-            torch.randn([self.k, self.dim_x]) if u_initial is None else u_initial,
-            requires_grad=True
-        )
+        self.u_uc = nn.Parameter(torch.randn([self.k, self.dim_x]), requires_grad=True)
 
         self.categorical_prior = categorical_prior
         self.decoupled_variance = decoupled_variance
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
         self.wishart_prior = wishart_prior
-        self.variational_dp = variational_dp
-
+        self.dirichlet_process_variational_family = dirichlet_process_variational_family
 
         # variational parameters for cluster proportions
-        alpha = torch.ones(self.k) * initial_alpha
+        alpha = torch.ones(self.k)
         self.alpha_uc = nn.Parameter(alpha.log(), requires_grad=self.dirichlet_prior or self.dirichlet_process)
         one_minus_v = 1 - 1 / self.k[None]
         for i in range(1, self.k):
@@ -118,9 +112,9 @@ class VampPrior(lightning.LightningModule):
 
     def alpha_and_beta(self):
         alpha = self.alpha_uc.exp()
-        beta = self.beta_uc.exp()
-
-        if not self.variational_dp:
+        if self.dirichlet_process_variational_family:
+            beta = self.beta_uc.exp()
+        else:
             beta = torch.concat([alpha[1:].cumsum(dim=0), torch.as_tensor([1]).to(alpha.device)])
 
         return alpha, beta
@@ -134,7 +128,7 @@ class VampPrior(lightning.LightningModule):
         return n, V
 
     def pc(self):
-        if self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
+        if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
             alpha, _ = self.alpha_and_beta()
             probs = alpha / alpha.sum()
         elif self.dirichlet_process:
@@ -208,7 +202,7 @@ class VampPrior(lightning.LightningModule):
         log_probs = log_pz_c
         if self.categorical_prior:
             log_probs -= torch.log(self.k)
-        elif self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
+        elif self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
             alpha, _ = self.alpha_and_beta()
             log_probs += torch.digamma(alpha) - torch.digamma(alpha.sum())
         elif self.dirichlet_process:
@@ -229,7 +223,7 @@ class VampPrior(lightning.LightningModule):
         if self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
-        elif self.dirichlet_prior or (self.dirichlet_process and not self.variational_dp):
+        elif self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
             alpha, _ = self.alpha_and_beta()
             dkl_c = -qc_z.entropy() - (qc_z.probs * (torch.digamma(alpha) - torch.digamma(alpha.sum()))).sum(dim=1)
             return dkl_c.sum()

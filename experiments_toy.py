@@ -116,8 +116,7 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
         decoder=Decoder(dim_x=2, dim_z=1, sigma_constraint=torch.exp),
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
-        # u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
-        variational_dp=True,
+        dirichlet_process_variational_family=True,
         **config
     )
 

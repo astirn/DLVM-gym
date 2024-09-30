@@ -113,7 +113,6 @@ if __name__ == '__main__':
         num_data=len(ds_train),
         encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim, sigma_constraint=torch.exp),
         decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim, sigma_constraint=torch.exp),
-        # u_initial=2 * next(iter(dl_train))['x'][:50],
         u_constraint=F.tanh,
         truncation_level=50,
         learning_rate=5e-4,
@@ -121,9 +120,8 @@ if __name__ == '__main__':
         decoupled_variance=args.decoupled_variance,
         dirichlet_prior=args.dirichlet_prior,
         dirichlet_process=args.dirichlet_process,
-        variational_dp=True,
+        dirichlet_process_variational_family=True,
         wishart_prior=args.wishart_prior,
-        initial_alpha=1.0, # lower -> eliminates clusters
     )
 
     # train model
