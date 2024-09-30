@@ -37,7 +37,7 @@ class ClusteringMetrics(torchmetrics.Metric):
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {
-            'clusters': (self.assignments > 0).sum().to(torch.float32),
+            'clusters': (self.assignments > 10).sum().to(torch.float32),
             'acc': self.accuracy / self.num_samples,
             'nmi': self.nmi / self.num_batches,
         }
@@ -61,6 +61,7 @@ class VampPrior(lightning.LightningModule):
             dirichlet_process: bool = False,
             dirichlet_process_variational_family: bool = False,
             wishart_prior: bool = False,
+            wishart_variational_family_initial_variance: float = 0.5,
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -99,8 +100,7 @@ class VampPrior(lightning.LightningModule):
 
         # variational parameters for cluster precisions
         self.n_uc = nn.Parameter(torch.zeros(self.k), requires_grad=self.wishart_prior)
-        V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
-        L = torch.linalg.cholesky(V)
+        L = torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * wishart_variational_family_initial_variance
         self.L_uc = nn.Parameter(
             L.tril(-1) + L.diagonal(dim1=-2, dim2=-1).log().diag_embed(),
             requires_grad=self.decoupled_variance or self.wishart_prior,
@@ -317,16 +317,4 @@ class VampPrior(lightning.LightningModule):
             weight_decay=0,
         )
 
-        # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        #     optimizer=optimizer,
-        #     max_lr=self.learning_rate,
-        #     epochs=250,
-        #     steps_per_epoch=1,
-        #     pct_start=0.3,
-        #     three_phase=False,
-        # )
-
-        return dict(
-            optimizer=optimizer,
-            # lr_scheduler=dict(scheduler=lr_scheduler, interval='epoch')
-        )
+        return optimizer
