@@ -139,7 +139,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
     cluster_assignments = cluster_probabilities.argmax(dim=1)
 
-    z_plot = torch.linspace(start=-30, end=30, steps=5000).unsqueeze(dim=1)
+    z_plot = torch.linspace(start=-100, end=100, steps=5000).unsqueeze(dim=1)
     pc_model = model.pc()
     pz_c_model = pc_model.probs * model.pz_c(z_plot)
     pz_model = pz_c_model.sum(dim=1)
