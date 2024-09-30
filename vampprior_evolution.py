@@ -103,10 +103,8 @@ class VampPrior(lightning.LightningModule):
         beta[-1] = 1
         self.beta_uc = nn.Parameter(beta.log(), requires_grad=self.dirichlet_process)
 
-        self.n_uc = nn.Parameter(
-            softplus_inverse(self.dim_z * torch.ones(self.k) + 2),
-            requires_grad=True
-        )
+        # variational parameters for cluster precisions
+        self.n_uc = nn.Parameter(torch.zeros(self.k), requires_grad=self.wishart_prior)
         V = self.qz_x(self.u_constraint(self.u_uc)).precision_matrix
         L = torch.linalg.cholesky(V)
         self.L_uc = nn.Parameter(
@@ -128,8 +126,8 @@ class VampPrior(lightning.LightningModule):
         return alpha, beta
 
     def n_and_V(self):
-        n = F.softplus(self.n_uc)
-        L = self.L_uc.tril(-1) + torch.clamp_max(self.L_uc.diagonal(dim1=-2, dim2=-1).exp(), 100).diag_embed()
+        n = self.n_uc.exp() + self.dim_z
+        L = self.L_uc.tril(-1) + self.L_uc.diagonal(dim1=-2, dim2=-1).exp().diag_embed()
         V = L @ L.mT
         if self.wishart_prior:
             V = V / n[:, None, None]
@@ -265,8 +263,7 @@ class VampPrior(lightning.LightningModule):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            V_p_inv = n_p * self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix
-            # V_p_inv = V_p_inv * (self.pc().probs[:, None, None] * self.num_data + 1) ** (0.5 / self.dim_z)
+            V_p_inv = self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix / 10
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
