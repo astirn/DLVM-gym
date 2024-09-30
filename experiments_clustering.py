@@ -33,12 +33,12 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(self.log_sigma(out).exp(), MIN_STD)
+        sigma = torch.clamp_min(self.sigma_constraint(self.sigma_uc(out)), MIN_STD)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(self, dim_x: int, dim_z: int, sigma_constraint: callable):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
@@ -49,10 +49,12 @@ class Decoder(nn.Module):
             nn.ELU(),
             nn.Linear(500, dim_x)
         )
-        self.log_sigma = nn.Parameter(torch.zeros(dim_x))
+        self.sigma_uc = nn.Parameter(torch.zeros(dim_x))
+        self.sigma_constraint = sigma_constraint
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), torch.clamp_min(self.log_sigma.exp(), MIN_STD)), 1)
+        sigma = self.sigma_constraint(self.sigma_uc)
+        return dist.Independent(dist.Normal(self.mu(x), torch.clamp_min(sigma, MIN_STD)), 1)
 
 
 def collate(batch):
