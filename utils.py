@@ -28,6 +28,7 @@ def get_trainer(checkpoint_metrics: list[str], checkpoint_dir: str | None) -> li
             ),
         ] + metric_checkpoint_callbacks,
         devices=1,
+        enable_checkpointing=checkpoint_dir is not None,
         gradient_clip_algorithm='value',
         gradient_clip_val=1.0,
         logger=False,
