@@ -199,9 +199,14 @@ if __name__ == '__main__':
     toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
     for config in TEST_CASES:
-        save_path = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
-        os.makedirs(save_path, exist_ok=True)
-        if not os.path.exists(f'{save_path}/DONE') or args.replace_results:
-            fit_model(config, toy_data, save_path, args.seed)
+        checkpoint_path = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
+        os.makedirs(checkpoint_path, exist_ok=True)
+        if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
+            fit_model(config, toy_data, checkpoint_path, args.seed)
         results_dir = f'results/toy/{args.dataset}/{args.seed}'
-        plot_results(toy_data, f'{results_dir}/{str(config)}.pdf', save_path, args.seed)
+        plot_results(
+            data=toy_data,
+            fig_path=f'{results_dir}/{str(config)}.pdf',
+            model_path=f'{checkpoint_path}/best_train_elbo.ckpt',
+            seed=args.seed
+        )
