@@ -10,6 +10,7 @@ import zlib
 
 from cytoolz import merge_with
 from constants import TEST_CASES
+from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from utils import get_trainer
@@ -97,11 +98,13 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
 
     torch.set_float32_matmul_precision('high')
     trainer = get_trainer(
-        checkpoint_metrics=['train_elbo', 'valid_elbo', 'nmi'],
+        checkpoint_metrics=['train_elbo', 'val_elbo', 'nmi'],
         checkpoint_dir=checkpoint_dir,
         patience=PATIENCE,
     )
     trainer.fit(model, dl_train, dl_valid)
+
+    Path(f'{checkpoint_dir}/DONE').touch()
 
 
 if __name__ == '__main__':
@@ -121,6 +124,7 @@ if __name__ == '__main__':
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         for config in TEST_CASES:
             config['dim_z'] = args.latent_dim
-            save_path = f'experiments/clustering/{args.dataset}/trial_{trial}/'
-            if not os.path.exists(save_path) or args.replace_results:
+            save_path = f'experiments/clustering/{args.dataset}/trial_{trial}/{str(config)}'
+            os.makedirs(save_path, exist_ok=True)
+            if not os.path.exists(f'{save_path}/DONE') or args.replace_results:
                 fit_model(args.batch_size, config, args.dataset, save_path, trial_seed)
