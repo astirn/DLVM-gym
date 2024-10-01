@@ -16,8 +16,8 @@ from vampprior_evolution import VampPrior
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
 LEARNING_RATE = 5e-4
+PATIENCE = 1_000
 TRUNCATION_LEVEL = 40
-
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int,):
@@ -119,7 +119,7 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
     trainer = get_trainer(
         checkpoint_metrics=['train_elbo'],
         checkpoint_dir=os.path.dirname(model_path),
-        patience=1_000,
+        patience=PATIENCE,
     )
     torch.set_float32_matmul_precision('high')
     trainer.fit(model, train_dataloaders=dataloader)
@@ -157,7 +157,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=COLOR_PALETTE)
     ax.get_legend().remove()
 
-    ax = fig.add_subplot(gs[0, :])
+    ax = fig.add_subplot(gs[1, :])
     ax.set_xlabel('z')
     ax.set_title('Mixture Density')
     ax.set_ylabel('density')
