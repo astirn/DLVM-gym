@@ -95,7 +95,7 @@ class VampPrior(lightning.LightningModule):
 
         # variational parameters for cluster precisions
         self.n_uc = nn.Parameter(torch.zeros(self.k), requires_grad=self.wishart_prior)
-        L = torch.eye(self.dim_z)[None].repeat(self.k, 1, 1) * wishart_variational_family_initial_variance
+        L = torch.eye(self.dim_z)[None].repeat(self.k, 1, 1)
         self.L_uc = nn.Parameter(
             L.tril(-1) + L.diagonal(dim1=-2, dim2=-1).log().diag_embed(),
             requires_grad=self.decoupled_variance or self.wishart_prior,
