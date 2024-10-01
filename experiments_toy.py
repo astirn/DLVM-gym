@@ -5,11 +5,12 @@ import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.utils.data as data
 
 from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
+from pathlib import Path
+from torch.utils.data import DataLoader, TensorDataset
 from utils import get_trainer
 from vampprior_evolution import VampPrior
 
@@ -50,7 +51,6 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(x), scale=self.sigma_uc.exp() ** 0.5), 1)
 
 
-
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
@@ -84,7 +84,7 @@ def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
     else:
         raise NotImplementedError
 
-    return data.TensorDataset(x, c)
+    return TensorDataset(x, c)
 
 
 def collate(batch):
@@ -94,13 +94,13 @@ def collate(batch):
     return batch
 
 
-def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: int | None):
+def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    dataloader = data.DataLoader(
-        dataset,
-        batch_size=len(dataset),
+    dataloader = DataLoader(
+        data,
+        batch_size=len(data),
         collate_fn=collate,
         shuffle=True
     )
@@ -108,30 +108,32 @@ def fit_model(config: dict, dataset: data.TensorDataset, model_path: str, seed: 
     model = VampPrior(
         dim_x=2,
         dim_z=1,
-        num_data=len(dataset),
+        num_data=len(data),
         encoder=Encoder(dim_x=2, dim_z=1),
         decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
-        **config
+        **model_config
     )
 
     trainer = get_trainer(
         checkpoint_metrics=['train_elbo'],
-        checkpoint_dir=os.path.dirname(model_path),
+        checkpoint_dir=os.path.dirname(checkpoint_dir),
         patience=PATIENCE,
     )
     torch.set_float32_matmul_precision('high')
     trainer.fit(model, train_dataloaders=dataloader)
 
+    Path(f'{checkpoint_dir}/DONE').touch()
+
     torch.cuda.empty_cache()
 
 
-def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, seed: int | None):
+def plot_results(data: TensorDataset, fig_path: str, model_path: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    x = dataset.tensors[0]
+    x = data.tensors[0]
 
     model = VampPrior.load_from_checkpoint(model_path, map_location='cpu')
 
@@ -194,26 +196,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    experiment_dir = f'experiments/toy/{args.dataset}/{args.seed}'
-    os.makedirs(experiment_dir, exist_ok=True)
-    results_dir = f'results/toy/{args.dataset}'
-    os.makedirs(results_dir, exist_ok=True)
+    toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
 
-    toy_dataset = generate_toy_data(args.dataset, args.num_samples, args.seed)
-
-    for model_config in TEST_CASES:
-        model_name = str(model_config)
-        checkpoint = f'{experiment_dir}/{model_name}/best_train_elbo.ckpt'
-        if not os.path.exists(checkpoint) or args.replace_results:
-            fit_model(
-                config=model_config,
-                dataset=toy_dataset,
-                model_path=f'{experiment_dir}/{model_name}/',
-                seed=args.seed
-            )
-        plot_results(
-            dataset=toy_dataset,
-            fig_path=f'{results_dir}/{model_name}.pdf',
-            model_path=checkpoint,
-            seed=args.seed
-        )
+    for config in TEST_CASES:
+        save_path = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
+        os.makedirs(save_path, exist_ok=True)
+        if not os.path.exists(f'{save_path}/DONE') or args.replace_results:
+            fit_model(config, toy_data, save_path, args.seed)
+        results_dir = f'results/toy/{args.dataset}/{args.seed}'
+        plot_results(toy_data, f'{results_dir}/{str(config)}.pdf', save_path, args.seed)
