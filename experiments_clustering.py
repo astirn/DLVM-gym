@@ -1,10 +1,12 @@
 import argparse
 import numpy as np
+import os
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.datasets as datasets
+import zlib
 
 from cytoolz import merge_with
 from constants import TEST_CASES
@@ -13,6 +15,9 @@ from torchvision.transforms import ToTensor
 from utils import get_trainer
 from vampprior_evolution import VampPrior
 
+LEARNING_RATE = 5e-4
+PATIENCE = 20
+TRUNCATION_LEVEL = 50
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int,):
@@ -61,65 +66,61 @@ def collate(batch):
     return batch
 
 
-if __name__ == '__main__':
+def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir: str, seed: int):
+    torch.manual_seed(seed)
 
-    parser = argparse.ArgumentParser()
+    ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
+    ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
 
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--latent_dim', type=int, default=30)
-    parser.add_argument('--seed', type=int, default=None)
-
-    parser.add_argument('--categorical_prior', action='store_true', default=False)
-    parser.add_argument('--decoupled_variance', action='store_true', default=False)
-    parser.add_argument('--dirichlet_prior', action='store_true', default=False)
-    parser.add_argument('--dirichlet_process', action='store_true', default=False)
-    parser.add_argument('--wishart_prior', action='store_true', default=False)
-
-    args = parser.parse_args()
-
-    # random seed
-    if args.seed is not None:
-        torch.backends.cudnn.benchmark = False
-        torch.manual_seed(args.seed)
-
-    # load dataset
-    dataset = getattr(datasets, args.dataset)
-    ds_train = dataset(root='data', train=True, download=True, transform=ToTensor())
-    ds_test = dataset(root='data', train=False, download=True, transform=ToTensor())
-
-    # create dataloaders
     dl_kwargs = {
-        'batch_size': args.batch_size,
+        'batch_size': batch_size,
         'collate_fn': collate,
         'drop_last': True,
         'num_workers': 4,
         'persistent_workers': True,
         'pin_memory': False
     }
-    dl_train = torch.utils.data.DataLoader(ds_train, shuffle=True, **dl_kwargs)
-    dl_test = torch.utils.data.DataLoader(ds_test, shuffle=False, **dl_kwargs)
+    dl_train = DataLoader(ds_train, shuffle=True, **dl_kwargs)
+    dl_valid = DataLoader(ds_valid, shuffle=False, **dl_kwargs)
 
-    # build model
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
         dim_x=data_dim,
-        dim_z=args.latent_dim,
         num_data=len(ds_train),
-        encoder=Encoder(dim_x=data_dim, dim_z=args.latent_dim),
-        decoder=Decoder(dim_x=data_dim, dim_z=args.latent_dim),
+        encoder=Encoder(dim_x=data_dim, dim_z=model_config['dim_z']),
+        decoder=Decoder(dim_x=data_dim, dim_z=model_config['dim_z']),
         u_constraint=F.tanh,
-        truncation_level=50,
-        learning_rate=5e-4,
-        categorical_prior=args.categorical_prior,
-        decoupled_variance=args.decoupled_variance,
-        dirichlet_prior=args.dirichlet_prior,
-        dirichlet_process=args.dirichlet_process,
-        dirichlet_process_variational_family=True,
-        wishart_prior=args.wishart_prior,
+        truncation_level=TRUNCATION_LEVEL,
+        learning_rate=LEARNING_RATE,
+        **model_config
     )
 
-    # train model
     torch.set_float32_matmul_precision('high')
-    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=20)
-    trainer.fit(model, dl_train, dl_test)
+    trainer = get_trainer(
+        checkpoint_metrics=['train_elbo', 'valid_elbo', 'nmi'],
+        checkpoint_dir=checkpoint_dir,
+        patience=PATIENCE,
+    )
+    trainer.fit(model, dl_train, dl_valid)
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--dataset', type=str, default='MNIST')
+    parser.add_argument('--latent_dim', type=int, default=30)
+    parser.add_argument('--num_trials', type=int, default=1)
+    parser.add_argument('--replace_results', action='store_true')
+    parser.add_argument('--seed', type=int, default=12345)
+
+    args = parser.parse_args()
+
+    for trial in range(1, args.num_trials + 1):
+        trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
+        for config in TEST_CASES:
+            config['dim_z'] = args.latent_dim
+            save_path = f'experiments/clustering/{args.dataset}/trial_{trial}/'
+            if not os.path.exists(save_path) or args.replace_results:
+                fit_model(args.batch_size, config, args.dataset, save_path, trial_seed)
