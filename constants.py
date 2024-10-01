@@ -10,8 +10,6 @@ COLOR_PALETTE = pipe(
     list
 )
 
-MIN_STD = 0.01
-
 TEST_CASES = [
     dict(),
 
