@@ -3,15 +3,14 @@ import matplotlib.pyplot as plt
 import os
 import seaborn as sns
 import torch
-import torch.nn.functional as F
 import torch.distributions as dist
 import torch.nn as nn
 import torch.utils.data as data
 
-from constants import COLOR_PALETTE, MIN_STD, TEST_CASES
+from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import merge_with
 from matplotlib.gridspec import GridSpec
-from utils import get_trainer, softplus_inverse
+from utils import get_trainer
 from vampprior_evolution import VampPrior
 
 CLUSTER_STD = 0.5
@@ -33,8 +32,8 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+        sigma = self.sigma_uc(out).exp()
+        return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
@@ -45,11 +44,11 @@ class Decoder(nn.Module):
             nn.Tanh(),
             nn.Linear(HIDDEN_DIM, dim_x),
         )
-        self.sigma_uc = nn.Parameter(softplus_inverse(torch.ones(dim_x)))
+        self.sigma_uc = nn.Parameter(torch.as_tensor(0.0))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
-        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
+        return dist.Independent(dist.Normal(self.mu(x), scale=self.sigma_uc.exp() ** 0.5), 1)
+
 
 
 def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
