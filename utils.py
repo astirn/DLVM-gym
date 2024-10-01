@@ -35,8 +35,6 @@ def get_trainer(
         ] + metric_checkpoint_callbacks,
         devices=1,
         enable_checkpointing=checkpoint_dir is not None,
-        gradient_clip_algorithm='value',
-        gradient_clip_val=1.0,
         logger=False,
         max_epochs=-1,
         num_sanity_val_steps=0,

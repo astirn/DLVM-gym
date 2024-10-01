@@ -7,10 +7,10 @@ import torch.nn.functional as F
 import torchvision.datasets as datasets
 
 from cytoolz import merge_with
-from constants import MIN_STD, TEST_CASES
+from constants import TEST_CASES
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from utils import get_trainer, softplus_inverse
+from utils import get_trainer
 from vampprior_evolution import VampPrior
 
 
@@ -31,8 +31,8 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc(out)), MIN_STD)
-        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+        sigma = self.sigma_uc(out).exp()
+        return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
@@ -47,11 +47,10 @@ class Decoder(nn.Module):
             nn.ELU(),
             nn.Linear(500, dim_x)
         )
-        self.sigma_uc = nn.Parameter(torch.zeros(dim_x))
+        self.sigma_uc = nn.Parameter(torch.as_tensor(0.0))
 
     def forward(self, x: torch.Tensor) -> dist.Distribution:
-        sigma = torch.clamp_min(F.softplus(self.sigma_uc), MIN_STD)
-        return dist.Independent(dist.Normal(self.mu(x), sigma), 1)
+        return dist.Independent(dist.Normal(self.mu(x), scale=self.sigma_uc.exp() ** 0.5), 1)
 
 
 def collate(batch):
