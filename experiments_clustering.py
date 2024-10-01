@@ -147,9 +147,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
+    parser.add_argument('--learning_rate', type=float, default=3e-4)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
     parser.add_argument('--seed', type=int, default=12345)
@@ -164,6 +164,7 @@ if __name__ == '__main__':
             checkpoint_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
+                Path(f'{checkpoint_path}/DONE').unlink(missing_ok=True)
                 fit_model(args.batch_size, config, args.dataset, args.learning_rate, checkpoint_path, trial_seed)
             trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
