@@ -264,7 +264,7 @@ class VampPrior(lightning.LightningModule):
                 one_minus_v = 1 - v
                 covariance_proportions = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
             else:
-                covariance_proportions = 1 / torch.ones(self.k)
+                covariance_proportions = 1 / self.k[None]
             covariance_proportions = torch.clamp_min(covariance_proportions ** (1 / self.dim_z), 0.01)
             V_p_inv = n_p * covariance * covariance_proportions[:, None, None]
 
