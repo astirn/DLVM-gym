@@ -148,23 +148,7 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
 
-    ax = fig.add_subplot(gs[0, :])
-    ax.set_title('Scaled Component Densities')
-    ax.set_xlabel('z')
-    ax.set_xticks([])
-    ax.set_ylabel('density')
-    ax.set_yticks([])
-    sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=COLOR_PALETTE)
-    ax.get_legend().remove()
-
-    ax = fig.add_subplot(gs[1, :])
-    ax.set_xlabel('z')
-    ax.set_title('Mixture Density')
-    ax.set_ylabel('density')
-    ax.set_yticks([])
-    ax.plot(z_plot[i_start:i_stop], pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
-
-    ax = fig.add_subplot(gs[2:, :])
+    ax = fig.add_subplot(gs[:2, :])
     ax.set_title('Model\'s Cluster Assignments')
     ax.set_xlabel('$x_1$')
     ax.set_xticks([])
@@ -178,6 +162,22 @@ def plot_results(dataset: data.TensorDataset, fig_path: str, model_path: str, se
         palette=COLOR_PALETTE,
     )
     ax.get_legend().remove()
+
+    ax = fig.add_subplot(gs[2, :])
+    ax.set_title('Scaled Component Densities')
+    ax.set_xlabel('z')
+    ax.set_xticks([])
+    ax.set_ylabel('density')
+    ax.set_yticks([])
+    sns.lineplot(pz_c_model[i_start:i_stop].detach(), alpha=0.5, dashes=False, palette=COLOR_PALETTE)
+    ax.get_legend().remove()
+
+    ax = fig.add_subplot(gs[3, :])
+    ax.set_xlabel('z')
+    ax.set_title('Mixture Density')
+    ax.set_ylabel('density')
+    ax.set_yticks([])
+    ax.plot(z_plot[i_start:i_stop], pz_model[i_start:i_stop].detach(), alpha=0.75, color='black')
 
     plt.tight_layout()
 
