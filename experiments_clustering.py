@@ -18,7 +18,6 @@ from utils import get_trainer
 from models import VampPrior
 
 DIM_Z = 30
-LEARNING_RATE = 5e-4
 PATIENCE = 20
 TRUNCATION_LEVEL = 50
 
@@ -69,7 +68,7 @@ def collate(batch):
     return batch
 
 
-def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: float, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
@@ -96,7 +95,7 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
         decoder=Decoder(dim_x=data_dim, dim_z=DIM_Z),
         u_constraint=F.tanh,
         truncation_level=TRUNCATION_LEVEL,
-        learning_rate=LEARNING_RATE,
+        learning_rate=learning_rate,
         **model_config
     )
 
@@ -150,6 +149,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--dataset', type=str, default='MNIST')
+    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
     parser.add_argument('--seed', type=int, default=12345)
@@ -159,11 +159,12 @@ if __name__ == '__main__':
     results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
+
         for config in TEST_CASES:
             checkpoint_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
-                fit_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
+                fit_model(args.batch_size, config, args.dataset, args.learning_rate, checkpoint_path, trial_seed)
             trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
 
