@@ -1,6 +1,4 @@
 import argparse
-import lightning
-import lightning.pytorch.callbacks as callbacks
 import numpy as np
 import torch
 import torch.distributions as dist
@@ -124,5 +122,5 @@ if __name__ == '__main__':
 
     # train model
     torch.set_float32_matmul_precision('high')
-    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None)
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=20)
     trainer.fit(model, dl_train, dl_test)
