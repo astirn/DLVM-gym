@@ -1,5 +1,6 @@
 import argparse
 import anndata
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -7,6 +8,7 @@ import pymde
 import scanpy as sc
 import scipy.sparse as sparse
 import scvi
+import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
@@ -202,6 +204,57 @@ def fit_scvi(batch_size: int, dataset: str, learning_rate: float, checkpoint_dir
     )
 
 
+def plot_mdes(dataset, checkpoint_dir, fig_path, fig_name):
+    data = load_dataset(dataset)
+
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 7))
+
+    mde = np.load(f'{checkpoint_dir}/mde.npy')
+
+    if os.path.exists(f'{checkpoint_dir}/cluster_probabilities.npy'):
+        cluster_probabilities = np.load(f'{checkpoint_dir}/cluster_probabilities.npy')
+        cluster_assignments = np.argmax(cluster_probabilities, axis=1)
+        _, cluster_assignments = np.unique(cluster_assignments, return_inverse=True)
+    else:
+        cluster_assignments = np.zeros_like(data.obs['cell_type'])
+
+    df = pd.DataFrame(data={
+        'x': mde[:, 0],
+        'y': mde[:, 1],
+        'Batch': data.obs['batch'] + 1,
+        'Cell type': data.obs['cell_type'],
+        'Cluster': cluster_assignments + 1
+    })
+
+    # comparison plot
+    kwargs = dict(
+        s=3,
+        alpha=0.5,
+        palette=COLOR_PALETTE,
+        rasterized=True,
+    )
+    sns.scatterplot(df, x='x', y='y', hue='Batch', ax=axes[0], legend='full', **kwargs)
+    sns.scatterplot(df, x='x', y='y', hue='Cell type', ax=axes[1], legend='full', **kwargs)
+    sns.scatterplot(df, x='x', y='y', hue='Cluster', style='Cluster', ax=axes[2], legend='full', **kwargs)
+    for ax in axes:
+        ax.set_xlabel('')
+        ax.set_xticks([])
+        ax.set_ylabel('')
+        ax.set_yticks([])
+
+    axes[0].set_title('Batch correction')
+    axes[1].set_title('Bio conservation')
+    axes[2].set_title('Model\'s Cluster Assignments')
+
+    sns.move_legend(axes[0], loc='upper center', bbox_to_anchor=(0.5, 0), ncol=2)
+    sns.move_legend(axes[1], loc='upper center', bbox_to_anchor=(0.5, 0), ncol=2)
+    sns.move_legend(axes[2], loc='upper center', bbox_to_anchor=(0.5, 0), ncol=4)
+
+    plt.tight_layout()
+    fig.savefig(f'{fig_path}/{fig_name}', dpi=200)
+
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -223,6 +276,10 @@ if __name__ == '__main__':
         os.makedirs(checkpoint_path, exist_ok=True)
         if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
             fit_scvi(args.batch_size, args.dataset, args.learning_rate, checkpoint_path, trial_seed)
+
+        results_dir = f'results/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI.pdf'
+        os.makedirs(results_dir, exist_ok=True)
+        plot_mdes(args.dataset, checkpoint_path, results_dir, 'scVI.pdf')
 
         # for config in TEST_CASES:
         #     checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
