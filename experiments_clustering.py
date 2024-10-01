@@ -15,7 +15,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from utils import get_trainer
-from vampprior_evolution import VampPrior
+from models import VampPrior
 
 DIM_Z = 30
 LEARNING_RATE = 5e-4

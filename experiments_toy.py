@@ -12,7 +12,7 @@ from matplotlib.gridspec import GridSpec
 from pathlib import Path
 from torch.utils.data import DataLoader, TensorDataset
 from utils import get_trainer
-from vampprior_evolution import VampPrior
+from models import VampPrior
 
 CLUSTER_STD = 0.5
 HIDDEN_DIM = 100
