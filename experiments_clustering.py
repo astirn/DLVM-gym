@@ -125,7 +125,7 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
     model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
     model_results = trainer.test(model, dl_test)[0]
 
-    model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
+    model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_nmi.ckpt')
     clustering_results = trainer.validate(model, dl_test)[0]
 
     torch.cuda.empty_cache()
@@ -133,15 +133,15 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
     return {**model_config, **model_results, **clustering_results}
 
 
-def build_table(results: list[dict]):
-    df = pd.DataFrame(results)
+def build_table(experimental_results: list[dict], save_path: str):
+    df = pd.DataFrame(experimental_results)
     df.rename(columns=TABLE_COLUMNS, inplace=True)
     df.fillna(False, inplace=True)
     df = df[TABLE_COLUMNS.values()]
     index = list(TABLE_COLUMNS.values())
     index = index[:index.index('log p(x)')]
-    df = df.groupby(index).mean().reset_index()
-    print(df)
+    df = df.groupby(index, sort=False).mean().reset_index()
+    df.to_pickle(f'{save_path}/results.pkl')
 
 
 if __name__ == '__main__':
@@ -167,4 +167,6 @@ if __name__ == '__main__':
             trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
 
-    build_table(results)
+    results_dir = f'results/clustering/{args.dataset}/{args.seed}'
+    os.makedirs(results_dir, exist_ok=True)
+    build_table(results, results_dir)
