@@ -127,7 +127,7 @@ if __name__ == '__main__':
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         for config in TEST_CASES:
             config['dim_z'] = args.latent_dim
-            save_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
-            os.makedirs(save_path, exist_ok=True)
-            if not os.path.exists(f'{save_path}/DONE') or args.replace_results:
-                fit_model(args.batch_size, config, args.dataset, save_path, trial_seed)
+            checkpoint_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
+            os.makedirs(checkpoint_path, exist_ok=True)
+            if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
+                fit_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
