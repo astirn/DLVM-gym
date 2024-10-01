@@ -67,8 +67,9 @@ def collate(batch):
     return batch
 
 
-def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir: str, seed: int):
-    torch.manual_seed(seed)
+def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
 
     ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
     ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
@@ -106,6 +107,8 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
 
     Path(f'{checkpoint_dir}/DONE').touch()
 
+    torch.cuda.empty_cache()
+
 
 if __name__ == '__main__':
 
@@ -124,7 +127,7 @@ if __name__ == '__main__':
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         for config in TEST_CASES:
             config['dim_z'] = args.latent_dim
-            save_path = f'experiments/clustering/{args.dataset}/trial_{trial}/{str(config)}'
+            save_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
             os.makedirs(save_path, exist_ok=True)
             if not os.path.exists(f'{save_path}/DONE') or args.replace_results:
                 fit_model(args.batch_size, config, args.dataset, save_path, trial_seed)
