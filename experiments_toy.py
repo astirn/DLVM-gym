@@ -118,7 +118,7 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
 
     trainer = get_trainer(
         checkpoint_metrics=['train_elbo'],
-        checkpoint_dir=os.path.dirname(checkpoint_dir),
+        checkpoint_dir=checkpoint_dir,
         patience=PATIENCE,
     )
     torch.set_float32_matmul_precision('high')
@@ -204,6 +204,7 @@ if __name__ == '__main__':
         if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
             fit_model(config, toy_data, checkpoint_path, args.seed)
         results_dir = f'results/toy/{args.dataset}/{args.seed}'
+        os.makedirs(results_dir, exist_ok=True)
         plot_results(
             data=toy_data,
             fig_path=f'{results_dir}/{str(config)}.pdf',
