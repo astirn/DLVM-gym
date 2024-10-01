@@ -38,6 +38,7 @@ class ClusteringMetrics(torchmetrics.Metric):
             'nmi': self.nmi / self.num_batches,
         }
 
+
 class ModelMetrics(torchmetrics.Metric):
     def __init__(self):
         super().__init__()
@@ -361,3 +362,61 @@ class VampPrior(lightning.LightningModule):
         )
 
         return optimizer
+
+
+# class SingleCellVampPrior(VampPrior):
+#     def __init__(
+#             self,
+#             dim_z: int,
+#             num_batches: int,
+#             num_genes: int,
+#             encoder: callable,
+#             decoder: callable,
+#             hidden_dims: list[int],
+#             likelihood: Literal['zinb', 'nb'] = 'zinb',
+#             **kwargs,
+#     ):
+#         VampPrior.__init__(
+#             self,
+#             dim_x=num_batches + num_genes,
+#             dim_z=dim_z,
+#             encoder=curry(encoder)(hidden_dims=hidden_dims),
+#             decoder=curry(decoder)(hidden_dims=hidden_dims, likelihood=likelihood),
+#             **kwargs
+#         )
+#         self.log_px_zsl = VampPrior.px_z  # renamed since decoder r
+#
+#     def evidence_lower_bound(self, x: torch.Tensor, s: torch.Tensor) -> (torch.Tensor, dict[str, dist.Distribution]):
+#         qz_x = self.qz_x(x, s)
+#         z = qz_x.rsample()
+#
+#         log_pz_c = self.log_pz_c(z)
+#         qc_z = self.qc_z(log_pz_c)
+#
+#         elbo_locals = (
+#             + self.log_px_zl(x, z, x.sum(dim=1)).sum()
+#             - self.dkl_z(qz_x, qc_z, log_pz_c)
+#             - self.dkl_c(qc_z)  # zero only for original VampPrior
+#         ) / x.shape[0]
+#         elbo_globals = (
+#             - self.dkl_pi()  # zero unless Dirichlet prior
+#             - self.dkl_v()  # zero unless Dirichlet process
+#             - self.dkl_Lambda()  # zero unless Wishart prior
+#         ) / self.num_data
+#         elbo = elbo_locals + elbo_globals
+#
+#         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
+#
+#     def training_step(self, batch, batch_idx):
+#         elbo, _ = self.evidence_lower_bound(batch['x'], batch['s'])
+#         self.log("train_elbo", elbo, prog_bar=True)
+#         return elbo
+#
+#     def validation_step(self, batch, batch_idx):
+#         elbo, variational_family = self.evidence_lower_bound(batch['x'], batch['s'])
+#         self.log("val_elbo", elbo, on_epoch=True, prog_bar=True, batch_size=batch['x'].shape[0])
+#         self.clustering_metrics.update(**{**batch, **variational_family})
+#
+#     def on_validation_epoch_end(self) -> None:
+#         self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
+#         self.clustering_metrics.reset()
