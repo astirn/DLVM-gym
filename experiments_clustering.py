@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import os
+import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
@@ -9,13 +10,14 @@ import torchvision.datasets as datasets
 import zlib
 
 from cytoolz import merge_with
-from constants import TEST_CASES
+from constants import TABLE_COLUMNS, TEST_CASES
 from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from utils import get_trainer
 from vampprior_evolution import VampPrior
 
+DIM_Z = 30
 LEARNING_RATE = 5e-4
 PATIENCE = 20
 TRUNCATION_LEVEL = 50
@@ -88,9 +90,10 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
         dim_x=data_dim,
+        dim_z=DIM_Z,
         num_data=len(ds_train),
-        encoder=Encoder(dim_x=data_dim, dim_z=model_config['dim_z']),
-        decoder=Decoder(dim_x=data_dim, dim_z=model_config['dim_z']),
+        encoder=Encoder(dim_x=data_dim, dim_z=DIM_Z),
+        decoder=Decoder(dim_x=data_dim, dim_z=DIM_Z),
         u_constraint=F.tanh,
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=LEARNING_RATE,
@@ -110,24 +113,58 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
     torch.cuda.empty_cache()
 
 
+def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    ds_test = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
+    dl_test = DataLoader(ds_test, batch_size=len(ds_test), collate_fn=collate, shuffle=False)
+
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
+
+    model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
+    model_results = trainer.test(model, dl_test)[0]
+
+    model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
+    clustering_results = trainer.validate(model, dl_test)[0]
+
+    torch.cuda.empty_cache()
+
+    return {**model_config, **model_results, **clustering_results}
+
+
+def build_table(results: list[dict]):
+    df = pd.DataFrame(results)
+    df.rename(columns=TABLE_COLUMNS, inplace=True)
+    df.fillna(False, inplace=True)
+    df = df[TABLE_COLUMNS.values()]
+    index = list(TABLE_COLUMNS.values())
+    index = index[:index.index('log p(x)')]
+    df = df.groupby(index).mean().reset_index()
+    print(df)
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--latent_dim', type=int, default=30)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
     parser.add_argument('--seed', type=int, default=12345)
 
     args = parser.parse_args()
 
+    results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         for config in TEST_CASES:
-            config['dim_z'] = args.latent_dim
             checkpoint_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 fit_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
+            trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
+            results.append({**trial_results, 'trial': trial})
+
+    build_table(results)

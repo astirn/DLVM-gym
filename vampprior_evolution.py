@@ -38,6 +38,24 @@ class ClusteringMetrics(torchmetrics.Metric):
             'nmi': self.nmi / self.num_batches,
         }
 
+class ModelMetrics(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('log_marginal', default=torch.tensor(0.))
+        self.add_state('posterior_predictive', default=torch.tensor(0.))
+        self.add_state('num_samples', default=torch.tensor(0.))
+
+    def update(self, log_marginal: torch.Tensor, posterior_predictive: torch.Tensor) -> None:
+        self.log_marginal += log_marginal
+        self.posterior_predictive += posterior_predictive
+        self.num_samples += 1
+
+    def compute(self) -> dict[str, torch.Tensor]:
+        return {
+            'log_marginal': self.log_marginal / self.num_samples,
+            'posterior_predictive': self.posterior_predictive / self.num_samples,
+        }
+
 
 class VampPrior(lightning.LightningModule):
 
@@ -102,6 +120,7 @@ class VampPrior(lightning.LightningModule):
         )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
+        self.model_metrics = ModelMetrics()
 
         self.learning_rate = learning_rate
 
@@ -314,6 +333,24 @@ class VampPrior(lightning.LightningModule):
     def on_validation_epoch_end(self) -> None:
         self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
         self.clustering_metrics.reset()
+
+    def test_step(self, batch, batch_idx):
+        _, variational_family = self.evidence_lower_bound(batch['x'])
+        self.clustering_metrics.update(**{**batch, **variational_family})
+        elbo = [self.evidence_lower_bound(batch['x'])[0] for _ in range(100)]
+        log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(100).float().log()
+        log_marginal = log_marginal.mean()
+        log_likelihood = [self.px_z(self.qz_x(batch['x']).rsample()).log_prob(batch['x']) for _ in range(100)]
+        posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(100).float().log()
+        posterior_predictive = posterior_predictive.mean()
+        self.model_metrics.update(log_marginal, posterior_predictive)
+
+    def on_test_epoch_end(self) -> None:
+        self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
+        self.log_dict(self.model_metrics.compute(), on_epoch=True, prog_bar=True)
+        self.clustering_metrics.reset()
+        self.model_metrics.reset()
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(

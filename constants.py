@@ -10,6 +10,21 @@ COLOR_PALETTE = pipe(
     list
 )
 
+TABLE_COLUMNS = {
+    'decoupled_variance': 'Decoupled',
+    'wishart_prior': 'Wishart',
+    'dirichlet_prior': 'Dirichlet',
+    'dirichlet_process': 'DP',
+    'dirichlet_process_variational_family': 'DP VF',
+
+    'log_marginal': 'log p(x)',
+    'posterior_predictive': 'log p(x|x)',
+
+    'acc': 'Accuracy',
+    'nmi': 'NMI',
+    'clusters': 'Clusters',
+}
+
 TEST_CASES = [
     dict(),
 
