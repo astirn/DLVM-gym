@@ -251,12 +251,23 @@ class VampPrior(lightning.LightningModule):
     def dkl_Lambda(self, qz_x):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
+
             n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
-            # V_p_inv = n_p * torch.eye(self.dim_z).to(n_p.device) * self.wishart_shrinkage
-            # V_p_inv = n_p * self.qz_x(self.u_constraint(self.u_uc)).covariance_matrix
             with torch.no_grad():
-                V_p_inv = n_p * torch.cov(qz_x.rsample().T)[None] * self.pc().probs[:, None, None] ** (2 / self.dim_z)
-            # V_p_inv = qz_x.covariance_matrix.mean(dim=0)
+                covariance = torch.cov(qz_x.rsample().T)
+            if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
+                covariance_proportions = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
+            elif self.dirichlet_process:
+                v = dist.Beta(*self.alpha_and_beta()).rsample()[:-1]
+                one = torch.ones_like(v)[:1]
+                v = torch.concat([v, one])
+                one_minus_v = 1 - v
+                covariance_proportions = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
+            else:
+                covariance_proportions = 1 / torch.ones(self.k)
+            covariance_proportions = torch.clamp_min(covariance_proportions ** (1 / self.dim_z), 0.01)
+            V_p_inv = n_p * covariance * covariance_proportions[:, None, None]
+
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
                     - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
