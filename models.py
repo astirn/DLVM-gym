@@ -300,7 +300,8 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def evidence_lower_bound(self, x: torch.Tensor) -> (torch.Tensor, dict[str, dist.Distribution]):
+    def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
+        x = batch['x']
         qz_x = self.qz_x(x)
         z = qz_x.rsample()
 
@@ -322,12 +323,12 @@ class VampPrior(lightning.LightningModule):
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
     def training_step(self, batch, batch_idx):
-        elbo, _ = self.evidence_lower_bound(batch['x'])
+        elbo, _ = self.evidence_lower_bound(batch)
         self.log("train_elbo", elbo, prog_bar=True)
         return elbo
 
     def validation_step(self, batch, batch_idx):
-        elbo, variational_family = self.evidence_lower_bound(batch['x'])
+        elbo, variational_family = self.evidence_lower_bound(batch)
         self.log("val_elbo", elbo, on_epoch=True, prog_bar=True, batch_size=batch['x'].shape[0])
         self.clustering_metrics.update(**{**batch, **variational_family})
 
@@ -338,7 +339,7 @@ class VampPrior(lightning.LightningModule):
     def test_step(self, batch, batch_idx):
         _, variational_family = self.evidence_lower_bound(batch['x'])
         self.clustering_metrics.update(**{**batch, **variational_family})
-        elbo = [self.evidence_lower_bound(batch['x'])[0] for _ in range(100)]
+        elbo = [self.evidence_lower_bound(batch)[0] for _ in range(100)]
         log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(100).float().log()
         log_marginal = log_marginal.mean()
         log_likelihood = [self.px_z(self.qz_x(batch['x']).rsample()).log_prob(batch['x']) for _ in range(100)]
@@ -352,7 +353,6 @@ class VampPrior(lightning.LightningModule):
         self.clustering_metrics.reset()
         self.model_metrics.reset()
 
-
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
             self.parameters(),
@@ -364,59 +364,57 @@ class VampPrior(lightning.LightningModule):
         return optimizer
 
 
-# class SingleCellVampPrior(VampPrior):
-#     def __init__(
-#             self,
-#             dim_z: int,
-#             num_batches: int,
-#             num_genes: int,
-#             encoder: callable,
-#             decoder: callable,
-#             hidden_dims: list[int],
-#             likelihood: Literal['zinb', 'nb'] = 'zinb',
-#             **kwargs,
-#     ):
-#         VampPrior.__init__(
-#             self,
-#             dim_x=num_batches + num_genes,
-#             dim_z=dim_z,
-#             encoder=curry(encoder)(hidden_dims=hidden_dims),
-#             decoder=curry(decoder)(hidden_dims=hidden_dims, likelihood=likelihood),
-#             **kwargs
-#         )
-#         self.log_px_zsl = VampPrior.px_z  # renamed since decoder r
-#
-#     def evidence_lower_bound(self, x: torch.Tensor, s: torch.Tensor) -> (torch.Tensor, dict[str, dist.Distribution]):
-#         qz_x = self.qz_x(x, s)
-#         z = qz_x.rsample()
-#
-#         log_pz_c = self.log_pz_c(z)
-#         qc_z = self.qc_z(log_pz_c)
-#
-#         elbo_locals = (
-#             + self.log_px_zl(x, z, x.sum(dim=1)).sum()
-#             - self.dkl_z(qz_x, qc_z, log_pz_c)
-#             - self.dkl_c(qc_z)  # zero only for original VampPrior
-#         ) / x.shape[0]
-#         elbo_globals = (
-#             - self.dkl_pi()  # zero unless Dirichlet prior
-#             - self.dkl_v()  # zero unless Dirichlet process
-#             - self.dkl_Lambda()  # zero unless Wishart prior
-#         ) / self.num_data
-#         elbo = elbo_locals + elbo_globals
-#
-#         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
-#
-#     def training_step(self, batch, batch_idx):
-#         elbo, _ = self.evidence_lower_bound(batch['x'], batch['s'])
-#         self.log("train_elbo", elbo, prog_bar=True)
-#         return elbo
-#
-#     def validation_step(self, batch, batch_idx):
-#         elbo, variational_family = self.evidence_lower_bound(batch['x'], batch['s'])
-#         self.log("val_elbo", elbo, on_epoch=True, prog_bar=True, batch_size=batch['x'].shape[0])
-#         self.clustering_metrics.update(**{**batch, **variational_family})
-#
-#     def on_validation_epoch_end(self) -> None:
-#         self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
-#         self.clustering_metrics.reset()
+class SingleCellVampPrior(VampPrior):
+    def __init__(
+            self,
+            n_cells: int,
+            n_genes: int,
+            n_batches: int,
+            n_latent: int,
+            encoder: callable,
+            decoder: callable,
+            truncation_level: int,
+            learning_rate: float,
+            **kwargs,
+    ):
+        VampPrior.__init__(
+            self,
+            dim_x=n_genes + n_batches,  # only genes are modelled, but this sets the psuedo-input dimension
+            dim_z=n_latent,
+            num_data=n_cells,
+            u_constraint=self.u_constraint,
+            encoder=encoder,
+            decoder=decoder,
+            truncation_level=truncation_level,
+            learning_rate=learning_rate,
+            **kwargs
+        )
+        self.log_px_zsl = VampPrior.px_z  # renamed since decoder returns a log probability rather a distribution
+
+    @staticmethod
+    def u_constraint(u_uc: torch.Tensor) -> torch.Tensor:
+        x_uc, s_uc = u_uc.split(2, dim=1)
+        return torch.concat([F.softplus(x_uc), F.softmax(s_uc)], dim=1)
+
+    def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
+        x, s = batch['x'], batch['s']
+        qz_x = self.qz_x(torch.concat([x.log1p(), s], dim=1))
+        z = qz_x.rsample()
+
+        log_pz_c = self.log_pz_c(z)
+        qc_z = self.qc_z(log_pz_c)
+
+        elbo_locals = (
+            + self.log_px_zl(x, z, x.sum(dim=1)).sum()
+            - self.dkl_z(qz_x, qc_z, log_pz_c)
+            - self.dkl_c(qc_z)  # zero only for original VampPrior
+        ) / x.shape[0]
+        elbo_globals = (
+            - self.dkl_pi()  # zero unless Dirichlet prior
+            - self.dkl_v()  # zero unless Dirichlet process
+            - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
+        ) / self.num_data
+        elbo = elbo_locals + elbo_globals
+
+        return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
+
