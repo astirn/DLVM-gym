@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import zlib
 
 from constants import COLOR_PALETTE, TEST_CASES
-from cytoolz import merge_with
+from cytoolz import concat, merge_with
 from torch.utils.data import DataLoader, TensorDataset
 from pathlib import Path
 
@@ -64,44 +64,78 @@ MAX_EPOCHS = 10_000
 PATIENCE = 20
 
 
-# class Encoder(nn.Module):
-#     def __init__(self, dim_x: int, dim_z: int, dim_hidden: int, num_layers: int, dropout: float):
-#         super().__init__()
-#         dims = [dim_x] + [dim_hidden] * num_layers + [dim_z]
-#         self.net = nn.Sequential()
-#         for i in range(len(dims) - 1):
-#             self.net.append(nn.Linear(dims[i], dims[i + 1]))
-#             if i < len(dims) - 2:
-#                 self.net.append(nn.BatchNorm1d(dims[i + 1]))
-#                 self.net.append(nn.ReLU())
-#                 self.net.append(nn.Dropout1d(dropout))
-#
-#     def forward(self, x: torch.Tensor, s: torch.Tensor) -> dist.MultivariateNormal:
-#         xs = torch.concat([torch.log1p(x), s], dim=1)
-#         out = self.net(xs)
-#         mu = self.mu(out)
-#         sigma = self.sigma(out)
-#         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
-#
-#
-# class Decoder(nn.Module):
-#     def __init__(self, dim_x: int, dim_z: int, dim_hidden: int, num_layers: int, dropout: float):
-#         super().__init__()
-#         dims = [dim_z] + [dim_hidden] * num_layers + [2 * dim_x]
-#         self.net = nn.Sequential()
-#         for i in range(len(dims) - 1):
-#             self.net.append(nn.Linear(dims[i], dims[i + 1]))
-#             if i < len(dims) - 2:
-#                 self.net.append(nn.BatchNorm1d(dims[i + 1]))
-#                 self.net.append(nn.ReLU())
-#                 self.net.append(nn.Dropout1d(dropout))
-#         self.log_theta = nn.Parameter(torch.zeros(dim_x))
-#
-#     def forward(self, z: torch.Tensor, s: torch.Tensor, l: torch.Tensor) -> torch.Distribution:
-#
-#         torch.split(self.net())
-#
-#         return dist.Independent(dist.Normal(self.mu(z), F.softplus(self.log_sigma)), 1)
+class Encoder(nn.Module):
+    def __init__(self, dim_in: int, n_latent: int, n_layers: int, n_hidden: int, **kwargs):
+        super().__init__()
+        dims = [dim_in] + [n_hidden] * n_layers
+        self.net = nn.Sequential(*list(concat(
+            [[
+                nn.Linear(dims[i], dims[i + 1]),
+                nn.BatchNorm1d(dims[i + 1], momentum=0.01, eps=0.001),
+                nn.ReLU(),
+                nn.Dropout(0.1),
+            ] for i in range(len(dims) - 1)]
+        )))
+        self.mu = nn.Linear(n_hidden, n_latent)
+        self.log_sigma = nn.Linear(n_hidden, n_latent)
+
+    def forward(self, x: torch.Tensor, s: torch.Tensor) -> dist.MultivariateNormal:
+        out = self.net(torch.concat([torch.log1p(x), s], dim=1))
+        mu = self.mu(out)
+        sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
+
+
+class Decoder(nn.Module):
+    def __init__(self, dim_out: int, likelihood: str, n_latent: int, n_layers: int, n_hidden: int, **kwargs):
+        super().__init__()
+        dims = [n_latent] + [n_hidden] * n_layers
+        self.net = nn.Sequential(*list(concat(
+            [[
+                nn.Linear(dims[i], dims[i + 1]),
+                nn.BatchNorm1d(dims[i + 1], momentum=0.01, eps=0.001),
+                nn.ReLU(),
+            ] for i in range(len(dims) - 1)]
+        )))
+        self.likelihood = likelihood
+        self.log_theta = nn.Parameter(torch.zeros(dim_out))
+        self.fw = nn.Sequential(
+            nn.Linear(dims[-1], dim_out),
+            nn.Softmax(dim=1),
+        )
+        self.fh = nn.Linear(dims[-1], dim_out)
+
+    def forward(self, z: torch.Tensor, x: torch.Tensor, s: torch.Tensor, eps=1e-8):
+        out = self.net(torch.concat([z, s], dim=1))
+        mu = x.sum(dim=1) * self.fw(out)
+        theta = self.log_theta.exp()
+        log_p = (mu + eps).log() - (mu + theta + eps).log()
+        log_1_minus_p = (theta + eps).log() - (mu + theta + eps).log()
+        if self.likelihood == 'nb':
+            log_prob = (
+                    x * log_p
+                    + theta * log_1_minus_p
+                    + (x + theta).lgamma()
+                    - theta.lgamma()
+                    - (x + 1).lgamma()
+            )
+        elif self.likelihood == 'zinb':
+            fh = self.fh(out)
+            zero_ll = F.softplus(-fh + theta * log_1_minus_p) - F.softplus(-fh)
+            non_zero_ll = (
+                    -fh
+                    - F.softplus(-fh)
+                    + theta * log_1_minus_p
+                    + x * log_p
+                    + (x + theta).lgamma()
+                    - theta.lgamma()
+                    - (x + 1).lgamma()
+            )
+            log_prob = torch.where(torch.le(x, 1e-8), zero_ll, non_zero_ll)
+        else:
+            raise NotImplementedError
+
+        return log_prob.sum(dim=1)
 
 
 def load_dataset(dataset: str) -> anndata.AnnData:
