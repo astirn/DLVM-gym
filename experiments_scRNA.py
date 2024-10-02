@@ -264,7 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
-    parser.add_argument('--seed', type=int, default=4282023)
+    parser.add_argument('--seed', type=int, default=None)
 
     args = parser.parse_args()
 

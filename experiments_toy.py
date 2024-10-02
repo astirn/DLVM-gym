@@ -191,7 +191,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset', type=str, default='moons')
     parser.add_argument('--num_samples', type=int, default=1_000)
-    parser.add_argument('--seed', type=int, default=12345)
+    parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--replace_results', action='store_true')
 
     args = parser.parse_args()
