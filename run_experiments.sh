@@ -11,7 +11,7 @@ python experiments_clustering.py --seed $SEED --dataset "FashionMNIST"
 
 # scRNA-seq experiments
 python experiments_scRNA.py --seed $SEED --dataset "cortex"
-python experiments_scRNA.py --seed $SEED --dataset "pbmc"
 python experiments_scRNA.py --seed $SEED --dataset "lung atlas"
+python experiments_scRNA.py --seed $SEED --dataset "pbmc"
 python experiments_scRNA.py --seed $SEED --dataset "retina"
 python experiments_scRNA.py --seed $SEED --dataset "split-seq"
