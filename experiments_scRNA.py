@@ -17,7 +17,8 @@ import zlib
 
 from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import concat, merge_with
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import ConcatDataset, DataLoader, TensorDataset
+from utils import get_trainer
 from pathlib import Path
 
 
@@ -61,6 +62,7 @@ DATASET_CONFIG = {
 }
 MAX_EPOCHS = 10_000
 PATIENCE = 20
+TRUNCATION_LEVEL = 50
 
 
 class Encoder(nn.Module):
@@ -219,7 +221,6 @@ def fit_scvi(batch_size: int, dataset: str, learning_rate: float, checkpoint_dir
     np.save(f'{checkpoint_dir}/train_indices.npy', model.train_indices.copy())
     np.save(f'{checkpoint_dir}/valid_indices.npy', model.validation_indices.copy())
 
-    pymde.seed(seed)
     embeddings = model.get_latent_representation()
     np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
     np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
@@ -229,12 +230,72 @@ def fit_scvi(batch_size: int, dataset: str, learning_rate: float, checkpoint_dir
     torch.cuda.empty_cache()
 
 
-    dataloader = DataLoader(
-        tensor_dataset,
-        batch_size=128,
-        collate_fn=curry(collate, num_batches=scvi_dataset.obs['batch'].nunique()),
-        shuffle=True
+def fit_model(
+        batch_size: int,
+        dataset: str,
+        learning_rate: float,
+        model_config: dict,
+        checkpoint_dir: str,
+        scvi_dir: str,
+        seed: int | None
+):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    scvi_dataset = load_dataset(dataset)
+    i_train = np.load(f'{scvi_dir}/train_indices.npy')
+    i_valid = np.load(f'{scvi_dir}/valid_indices.npy')
+
+    ds_train = TensorDataset(
+        torch.tensor(scvi_dataset.layers['counts'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.obs['batch'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.obs['cell_type'], dtype=torch.float32),
     )
+    ds_valid = TensorDataset(
+        torch.tensor(scvi_dataset.layers['counts'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.obs['batch'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.obs['cell_type'], dtype=torch.float32),
+    )
+
+    dl_kwargs = {
+        'batch_size': batch_size,
+        'collate_fn': collate,
+        'drop_last': True,
+        'num_workers': 4,
+        'persistent_workers': True,
+        'pin_memory': False
+    }
+    dl_train = DataLoader(ds_train, shuffle=True, **dl_kwargs)
+    dl_valid = DataLoader(ds_valid, shuffle=False, **dl_kwargs)
+
+    data_dim = np.prod(ds_train[0][0].shape[1:])
+    model = SingleCellVampPrior(
+        dim_x=data_dim,
+        dim_z=DATASET_CONFIG[dataset]['n_latent'],
+        num_data=len(ds_train),
+        encoder=Encoder(**DATASET_CONFIG[dataset]),
+        decoder=Decoder(**DATASET_CONFIG[dataset]),
+        u_constraint=F.tanh,
+        truncation_level=TRUNCATION_LEVEL,
+        learning_rate=learning_rate,
+        **model_config
+    )
+
+    torch.set_float32_matmul_precision('high')
+    trainer = get_trainer(
+        checkpoint_metrics=['train_elbo', 'val_elbo', 'nmi'],
+        checkpoint_dir=checkpoint_dir,
+        patience=PATIENCE,
+    )
+    trainer.fit(model, dl_train, dl_valid)
+
+    embeddings = trainer.predict(model, DataLoader(ConcatDataset([ds_train, ds_valid], shuffle=False, **dl_kwargs)))
+    np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
+    np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
+
+    Path(f'{checkpoint_dir}/DONE').touch()
+
+    torch.cuda.empty_cache()
 
 
 def plot_mdes(dataset, checkpoint_dir, fig_path, fig_name):
@@ -304,23 +365,21 @@ if __name__ == '__main__':
     results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
-
-        checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI'
-        os.makedirs(checkpoint_path, exist_ok=True)
-        if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
-            fit_scvi(args.batch_size, args.dataset, args.learning_rate, checkpoint_path, trial_seed)
-
-        results_dir = f'results/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI.pdf'
+        results_dir = f'results/scRNA/{args.dataset}/{args.seed}/trial_{trial}'
         os.makedirs(results_dir, exist_ok=True)
-        plot_mdes(args.dataset, checkpoint_path, results_dir, 'scVI.pdf')
+
+        scvi_checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI'
+        os.makedirs(scvi_checkpoint_path, exist_ok=True)
+        if not os.path.exists(f'{scvi_checkpoint_path}/DONE') or args.replace_results:
+            fit_scvi(args.batch_size, args.dataset, args.learning_rate, scvi_checkpoint_path, trial_seed)
+        plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, 'scVI.pdf')
 
         # for config in TEST_CASES:
         #     checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
         #     os.makedirs(checkpoint_path, exist_ok=True)
         #     if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
-        #         fit_model(config, args.dataset, checkpoint_path, trial_seed)
-            # trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
-            # results.append({**trial_results, 'trial': trial})
+        #         fit_model(args.batch_size, config, args.dataset, checkpoint_path, scvi_checkpoint_path, trial_seed)
+        #     plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, f'{str(config)}.pdf')
 
     # results_dir = f'results/scRNA/{args.dataset}/{args.seed}'
     # os.makedirs(results_dir, exist_ok=True)
