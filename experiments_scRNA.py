@@ -51,7 +51,6 @@ DATASET_CONFIG = {
         n_latent=10,
         n_layers=1,
         n_hidden=128,
-        learning_rate=5e-4
     ),
     'split-seq': dict(
         gene_likelihood='zinb',
