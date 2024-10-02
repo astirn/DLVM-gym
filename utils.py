@@ -43,3 +43,9 @@ def get_trainer(
 
 def softplus_inverse(x: torch.Tensor) -> torch.Tensor:
     return x + torch.log(-torch.expm1(-x))
+
+
+def seed_worker(worker_id: int):
+    worker_seed = torch.initial_seed() % 2 ** 32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)

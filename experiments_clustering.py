@@ -14,7 +14,7 @@ from constants import TABLE_COLUMNS, TEST_CASES
 from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from utils import get_trainer
+from utils import get_trainer, seed_worker
 from models import VampPrior
 
 DIM_Z = 30
@@ -71,6 +71,10 @@ def collate(batch):
 def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: float, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        g = None
 
     ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
     ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
@@ -79,9 +83,11 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
         'batch_size': batch_size,
         'collate_fn': collate,
         'drop_last': True,
+        'generator': g,
         'num_workers': 4,
         'persistent_workers': True,
-        'pin_memory': False
+        'pin_memory': False,
+        'worker_init_fn': seed_worker if seed is not None else None,
     }
     dl_train = DataLoader(ds_train, shuffle=True, **dl_kwargs)
     dl_valid = DataLoader(ds_valid, shuffle=False, **dl_kwargs)
