@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import pymde
 import scanpy as sc
 import scipy.sparse as sparse
 import scvi
@@ -17,8 +16,10 @@ import zlib
 
 from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import concat, merge_with
+from cytoolz.curried import curry
+from models import SingleCellVampPrior
 from torch.utils.data import ConcatDataset, DataLoader, TensorDataset
-from utils import get_trainer
+from utils import get_trainer, seed_worker
 from pathlib import Path
 
 
