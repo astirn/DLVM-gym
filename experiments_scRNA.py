@@ -309,6 +309,7 @@ def fit_model(
 
     torch.set_float32_matmul_precision('high')
     trainer = get_trainer(
+        early_stopping_metric='val_elbo',
         checkpoint_metrics=['train_elbo', 'val_elbo', 'nmi'],
         checkpoint_dir=checkpoint_dir,
         patience=PATIENCE,

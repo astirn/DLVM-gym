@@ -117,8 +117,10 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
     )
 
     trainer = get_trainer(
+        early_stopping_metric='train_elbo',
         checkpoint_metrics=['train_elbo'],
         checkpoint_dir=checkpoint_dir,
+        min_delta=0.01,
         patience=PATIENCE,
     )
     torch.set_float32_matmul_precision('high')

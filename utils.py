@@ -6,12 +6,14 @@ import torch
 
 
 def get_trainer(
-        checkpoint_metrics: list[str],
-        checkpoint_dir: str | None,
-        patience: int,
+        early_stopping_metric: str = None,
+        checkpoint_metrics: list[str] = None,
+        checkpoint_dir: str = None,
+        min_delta: float = 1.0,
+        patience: int = None,
 ) -> lightning.Trainer:
 
-    metric_checkpoint_callbacks = [
+    trainer_callbacks = [
         callbacks.ModelCheckpoint(
             auto_insert_metric_name=False,
             dirpath=checkpoint_dir,
@@ -23,18 +25,20 @@ def get_trainer(
             save_top_k=1,
         )
         for metric in checkpoint_metrics
-    ]
-
-    return lightning.Trainer(
-        callbacks=[
+    ] if checkpoint_metrics is not None else []
+    if early_stopping_metric is not None:
+        trainer_callbacks += [
             callbacks.EarlyStopping(
-                min_delta=1.0,
-                monitor='val_elbo',
+                min_delta=min_delta,
+                monitor=early_stopping_metric,
                 mode='max',
                 patience=patience,
                 verbose=True
-            ),
-        ] + metric_checkpoint_callbacks,
+            )
+        ]
+
+    return lightning.Trainer(
+        callbacks=trainer_callbacks,
         devices=1,
         enable_checkpointing=checkpoint_dir is not None,
         logger=False,
