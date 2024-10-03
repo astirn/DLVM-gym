@@ -28,8 +28,8 @@ def get_trainer(
     return lightning.Trainer(
         callbacks=[
             callbacks.EarlyStopping(
-                min_delta=0.01,
-                monitor='train_elbo',
+                min_delta=1.0,
+                monitor='val_elbo',
                 mode='max',
                 patience=patience,
                 verbose=True

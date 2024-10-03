@@ -5,11 +5,10 @@ import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.datasets as datasets
 import zlib
 
-from cytoolz import merge_with
+from cytoolz import merge_with, keyfilter
 from constants import TABLE_COLUMNS, TEST_CASES
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -18,8 +17,8 @@ from utils import get_trainer, seed_worker
 from models import VampPrior
 
 DIM_Z = 30
-PATIENCE = 20
-TRUNCATION_LEVEL = 50
+PATIENCE = 10
+TRUNCATION_LEVEL = 100
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int,):
@@ -98,7 +97,7 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
         num_data=len(ds_train),
         encoder=Encoder(dim_x=data_dim, dim_z=DIM_Z),
         decoder=Decoder(dim_x=data_dim, dim_z=DIM_Z),
-        u_constraint=F.tanh,
+        u_initial=next(iter(dl_train))['x'][:TRUNCATION_LEVEL],
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=learning_rate,
         **model_config
@@ -152,9 +151,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--dataset', type=str, default='MNIST')
-    parser.add_argument('--learning_rate', type=float, default=3e-4)
+    parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
     parser.add_argument('--seed', type=int, default=None)

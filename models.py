@@ -33,7 +33,7 @@ class ClusteringMetrics(torchmetrics.Metric):
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {
-            'clusters': (self.assignments > 10).sum().to(torch.float32),
+            'clusters': (self.assignments > 0).sum().to(torch.float32),
             'acc': self.accuracy / self.num_samples,
             'nmi': self.nmi / self.num_batches,
         }
@@ -328,7 +328,7 @@ class VampPrior(lightning.LightningModule):
 
     def training_step(self, batch, batch_idx):
         elbo, _ = self.evidence_lower_bound(batch)
-        self.log("train_elbo", elbo, prog_bar=True)
+        self.log("train_elbo", elbo, on_epoch=True, on_step=False, prog_bar=True)
         return elbo
 
     def validation_step(self, batch, batch_idx):

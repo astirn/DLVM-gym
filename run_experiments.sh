@@ -1,4 +1,4 @@
-SEED=4282023
+SEED=42823
 
 # toy experiments
 python experiments_toy.py --seed $SEED --dataset "isotropic_gmm"
