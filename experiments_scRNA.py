@@ -62,8 +62,8 @@ DATASET_CONFIG = {
     )
 }
 MAX_EPOCHS = 10_000
-PATIENCE = 20
-TRUNCATION_LEVEL = 50
+PATIENCE = 10
+TRUNCATION_LEVEL = 100
 
 
 class Encoder(nn.Module):
@@ -380,7 +380,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--dataset', type=str, default='cortex')
     parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--num_trials', type=int, default=1)
