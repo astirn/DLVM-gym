@@ -66,7 +66,7 @@ TRUNCATION_LEVEL = 50
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_in: int, n_latent: int, n_layers: int, n_hidden: int, **kwargs):
+    def __init__(self, dim_in: int, dim_out: int, n_layers: int, n_hidden: int, **kwargs):
         super().__init__()
         dims = [dim_in] + [n_hidden] * n_layers
         self.net = nn.Sequential(*list(concat(
@@ -77,20 +77,20 @@ class Encoder(nn.Module):
                 nn.Dropout(0.1),
             ] for i in range(len(dims) - 1)]
         )))
-        self.mu = nn.Linear(n_hidden, n_latent)
-        self.log_sigma = nn.Linear(n_hidden, n_latent)
+        self.mu = nn.Linear(n_hidden, dim_out)
+        self.log_sigma = nn.Linear(n_hidden, dim_out)
 
-    def forward(self, x: torch.Tensor, s: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(torch.concat([torch.log1p(x), s], dim=1))
+    def forward(self, xs: torch.Tensor) -> dist.MultivariateNormal:
+        out = self.net(xs)
         mu = self.mu(out)
         sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_out: int, likelihood: str, n_latent: int, n_layers: int, n_hidden: int, **kwargs):
+    def __init__(self, dim_in: int, dim_out: int, gene_likelihood: str, n_layers: int, n_hidden: int, **kwargs):
         super().__init__()
-        dims = [n_latent] + [n_hidden] * n_layers
+        dims = [dim_in] + [n_hidden] * n_layers
         self.net = nn.Sequential(*list(concat(
             [[
                 nn.Linear(dims[i], dims[i + 1]),
@@ -98,7 +98,7 @@ class Decoder(nn.Module):
                 nn.ReLU(),
             ] for i in range(len(dims) - 1)]
         )))
-        self.likelihood = likelihood
+        self.gene_likelihood = gene_likelihood
         self.log_theta = nn.Parameter(torch.zeros(dim_out))
         self.fw = nn.Sequential(
             nn.Linear(dims[-1], dim_out),
@@ -106,31 +106,31 @@ class Decoder(nn.Module):
         )
         self.fh = nn.Linear(dims[-1], dim_out)
 
-    def forward(self, z: torch.Tensor, x: torch.Tensor, s: torch.Tensor, eps=1e-8):
+    def forward(self, x: torch.Tensor, z: torch.Tensor, s: torch.Tensor, eps=1e-8):
         out = self.net(torch.concat([z, s], dim=1))
-        mu = x.sum(dim=1) * self.fw(out)
+        mu = self.fw(out) * x.sum(dim=1, keepdim=True)
         theta = self.log_theta.exp()
         log_p = (mu + eps).log() - (mu + theta + eps).log()
         log_1_minus_p = (theta + eps).log() - (mu + theta + eps).log()
-        if self.likelihood == 'nb':
+        if self.gene_likelihood == 'nb':
             log_prob = (
-                    x * log_p
-                    + theta * log_1_minus_p
-                    + (x + theta).lgamma()
-                    - theta.lgamma()
-                    - (x + 1).lgamma()
+                + x * log_p
+                + theta * log_1_minus_p
+                + (x + theta).lgamma()
+                - theta.lgamma()
+                - (x + 1).lgamma()
             )
-        elif self.likelihood == 'zinb':
+        elif self.gene_likelihood == 'zinb':
             fh = self.fh(out)
             zero_ll = F.softplus(-fh + theta * log_1_minus_p) - F.softplus(-fh)
             non_zero_ll = (
-                    -fh
-                    - F.softplus(-fh)
-                    + theta * log_1_minus_p
-                    + x * log_p
-                    + (x + theta).lgamma()
-                    - theta.lgamma()
-                    - (x + 1).lgamma()
+                - fh
+                - F.softplus(-fh)
+                + theta * log_1_minus_p
+                + x * log_p
+                + (x + theta).lgamma()
+                - theta.lgamma()
+                - (x + 1).lgamma()
             )
             log_prob = torch.where(torch.le(x, 1e-8), zero_ll, non_zero_ll)
         else:
@@ -178,10 +178,10 @@ def load_dataset(dataset: str) -> anndata.AnnData:
 
 
 def collate(batch, num_batches: int):
-    batch = list(map(lambda b: {'x': b[0], 's': torch.LongTensor([b[1]]), 'c': torch.LongTensor([b[2]])}, batch))
+    batch = list(map(lambda b: {'x': b[0], 's': b[1], 'c': b[2]}, batch))
     batch = merge_with(torch.vstack, batch)
-    batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
-    batch['s'] = F.one_hot(batch['s'], num_classes=num_batches)
+    batch['x'] = batch['x'].float()
+    batch['s'] = F.one_hot(batch['s'], num_classes=num_batches).squeeze(1).float()
     batch['c'] = batch['c'].squeeze()
     return batch
 
@@ -250,15 +250,20 @@ def fit_model(
     i_train = np.load(f'{scvi_dir}/train_indices.npy')
     i_valid = np.load(f'{scvi_dir}/valid_indices.npy')
 
+    cell_types = np.unique(scvi_dataset.obs['cell_type'], return_inverse=True)[1]
+    n_batches = len(np.unique(scvi_dataset.obs['batch']))
+    n_cells = scvi_dataset.layers['counts'].shape[0]
+    n_genes = scvi_dataset.layers['counts'].shape[1]
+
     ds_train = TensorDataset(
-        torch.tensor(scvi_dataset.layers['counts'], dtype=torch.float32),
-        torch.tensor(scvi_dataset.obs['batch'], dtype=torch.float32),
-        torch.tensor(scvi_dataset.obs['cell_type'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.layers['counts'][i_train]),
+        torch.LongTensor(scvi_dataset.obs['batch'].values[i_train]),
+        torch.LongTensor(cell_types[i_train]),
     )
     ds_valid = TensorDataset(
-        torch.tensor(scvi_dataset.layers['counts'], dtype=torch.float32),
-        torch.tensor(scvi_dataset.obs['batch'], dtype=torch.float32),
-        torch.tensor(scvi_dataset.obs['cell_type'], dtype=torch.float32),
+        torch.tensor(scvi_dataset.layers['counts'][i_valid]),
+        torch.LongTensor(scvi_dataset.obs['batch'].values[i_valid]),
+        torch.LongTensor(cell_types[i_valid]),
     )
 
     dl_kwargs = {
@@ -273,14 +278,29 @@ def fit_model(
     dl_train = DataLoader(ds_train, drop_last=True, shuffle=True, **dl_kwargs)
     dl_valid = DataLoader(ds_valid, drop_last=False, shuffle=False, **dl_kwargs)
 
-    data_dim = np.prod(ds_train[0][0].shape[1:])
+    encoder = Encoder(
+        dim_in=n_genes + n_batches,
+        dim_out=DATASET_CONFIG[dataset]['n_latent'],
+        **DATASET_CONFIG[dataset],
+    )
+    decoder = Decoder(
+        dim_in=DATASET_CONFIG[dataset]['n_latent'] + n_batches,
+        dim_out=n_genes,
+        **DATASET_CONFIG[dataset]
+    )
+    u_initial = next(iter(dl_train))
+    u_initial = torch.concat([
+        u_initial['x'][:TRUNCATION_LEVEL].log1p(),
+        u_initial['s'][:TRUNCATION_LEVEL]
+    ], dim=1)
     model = SingleCellVampPrior(
-        dim_x=data_dim,
-        dim_z=DATASET_CONFIG[dataset]['n_latent'],
-        num_data=len(ds_train),
-        encoder=Encoder(**DATASET_CONFIG[dataset]),
-        decoder=Decoder(**DATASET_CONFIG[dataset]),
-        u_constraint=F.tanh,
+        n_cells=n_cells,
+        n_genes=n_genes,
+        n_batches=n_batches,
+        n_latent=DATASET_CONFIG[dataset]['n_latent'],
+        encoder=encoder,
+        decoder=decoder,
+        u_initial=u_initial,
         truncation_level=TRUNCATION_LEVEL,
         learning_rate=learning_rate,
         **model_config
@@ -294,7 +314,7 @@ def fit_model(
     )
     trainer.fit(model, dl_train, dl_valid)
 
-    embeddings = trainer.predict(model, DataLoader(ConcatDataset([ds_train, ds_valid], shuffle=False, **dl_kwargs)))
+    embeddings = trainer.predict(model, DataLoader(ConcatDataset([ds_train, ds_valid]), shuffle=False, **dl_kwargs))
     np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
     np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
 
@@ -379,11 +399,19 @@ if __name__ == '__main__':
             fit_scvi(args.batch_size, args.dataset, args.learning_rate, scvi_checkpoint_path, trial_seed)
         plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, 'scVI.pdf')
 
-        # for config in TEST_CASES:
-        #     checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
-        #     os.makedirs(checkpoint_path, exist_ok=True)
-        #     if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
-        #         fit_model(args.batch_size, config, args.dataset, checkpoint_path, scvi_checkpoint_path, trial_seed)
+        for config in TEST_CASES:
+            checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
+            os.makedirs(checkpoint_path, exist_ok=True)
+            if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
+                fit_model(
+                    args.batch_size,
+                    args.dataset,
+                    args.learning_rate,
+                    config,
+                    checkpoint_path,
+                    scvi_checkpoint_path,
+                    trial_seed
+                )
         #     plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, f'{str(config)}.pdf')
 
     # results_dir = f'results/scRNA/{args.dataset}/{args.seed}'

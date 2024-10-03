@@ -379,7 +379,7 @@ class SingleCellVampPrior(VampPrior):
     ):
         VampPrior.__init__(
             self,
-            dim_x=n_genes + n_batches,  # only genes are modelled, but this sets the psuedo-input dimension
+            dim_x=n_genes + n_batches,  # only genes are modelled, but this sets the pseudo-input dimension
             dim_z=n_latent,
             num_data=n_cells,
             u_constraint=self.u_constraint,
@@ -389,12 +389,14 @@ class SingleCellVampPrior(VampPrior):
             learning_rate=learning_rate,
             **kwargs
         )
-        self.log_px_zsl = VampPrior.px_z  # renamed since decoder returns a log probability rather a distribution
+        self.n_genes = n_genes
+        self.log_px_zs = self.px_z  # renamed since decoder returns a log probability rather a distribution
 
-    @staticmethod
-    def u_constraint(u_uc: torch.Tensor) -> torch.Tensor:
-        x_uc, s_uc = u_uc.split(2, dim=1)
-        return torch.concat([F.softplus(x_uc), F.softmax(s_uc)], dim=1)
+    def u_constraint(self, u_uc: torch.Tensor) -> torch.Tensor:
+        return torch.concat([
+            u_uc[:, :self.n_genes],
+            F.softmax(u_uc[:, self.n_genes:], dim=1)
+        ], dim=1)
 
     def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
         x, s = batch['x'], batch['s']
@@ -405,7 +407,7 @@ class SingleCellVampPrior(VampPrior):
         qc_z = self.qc_z(log_pz_c)
 
         elbo_locals = (
-            + self.log_px_zl(x, z, x.sum(dim=1)).sum()
+            + self.log_px_zs(x, z, s).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)  # zero only for original VampPrior
         ) / x.shape[0]
@@ -418,3 +420,5 @@ class SingleCellVampPrior(VampPrior):
 
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
+    def predict_step(self, batch, batch_idx):
+        return self.qz_x(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
