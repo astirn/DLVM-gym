@@ -316,6 +316,7 @@ def fit_model(
     trainer.fit(model, dl_train, dl_valid)
 
     embeddings = trainer.predict(model, DataLoader(ConcatDataset([ds_train, ds_valid]), shuffle=False, **dl_kwargs))
+    embeddings = torch.vstack(embeddings).cpu().numpy()
     np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
     np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
 
