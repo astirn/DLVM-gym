@@ -241,6 +241,10 @@ def fit_model(
 ):
     if seed is not None:
         torch.manual_seed(seed)
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        g = None
 
     scvi_dataset = load_dataset(dataset)
     i_train = np.load(f'{scvi_dir}/train_indices.npy')
@@ -259,14 +263,15 @@ def fit_model(
 
     dl_kwargs = {
         'batch_size': batch_size,
-        'collate_fn': collate,
-        'drop_last': True,
+        'collate_fn': curry(collate, num_batches=n_batches),
+        'generator': g,
         'num_workers': 4,
         'persistent_workers': True,
-        'pin_memory': False
+        'pin_memory': False,
+        'worker_init_fn': seed_worker if seed is not None else None,
     }
-    dl_train = DataLoader(ds_train, shuffle=True, **dl_kwargs)
-    dl_valid = DataLoader(ds_valid, shuffle=False, **dl_kwargs)
+    dl_train = DataLoader(ds_train, drop_last=True, shuffle=True, **dl_kwargs)
+    dl_valid = DataLoader(ds_valid, drop_last=False, shuffle=False, **dl_kwargs)
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = SingleCellVampPrior(

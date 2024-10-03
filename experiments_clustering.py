@@ -82,15 +82,14 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
     dl_kwargs = {
         'batch_size': batch_size,
         'collate_fn': collate,
-        'drop_last': True,
         'generator': g,
         'num_workers': 4,
         'persistent_workers': True,
         'pin_memory': False,
         'worker_init_fn': seed_worker if seed is not None else None,
     }
-    dl_train = DataLoader(ds_train, shuffle=True, **dl_kwargs)
-    dl_valid = DataLoader(ds_valid, shuffle=False, **dl_kwargs)
+    dl_train = DataLoader(ds_train, drop_last=True, shuffle=True, **dl_kwargs)
+    dl_valid = DataLoader(ds_valid, drop_last=False, shuffle=False, **dl_kwargs)
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
