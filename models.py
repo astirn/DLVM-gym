@@ -341,20 +341,16 @@ class VampPrior(lightning.LightningModule):
         self.clustering_metrics.reset()
 
     def test_step(self, batch, batch_idx):
-        _, variational_family = self.evidence_lower_bound(batch['x'])
-        self.clustering_metrics.update(**{**batch, **variational_family})
-        elbo = [self.evidence_lower_bound(batch)[0] for _ in range(100)]
-        log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(100).float().log()
+        elbo = [self.evidence_lower_bound(batch)[0] for _ in range(1_000)]
+        log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(1_000).float().log()
         log_marginal = log_marginal.mean()
-        log_likelihood = [self.px_z(self.qz_x(batch['x']).rsample()).log_prob(batch['x']) for _ in range(100)]
-        posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(100).float().log()
+        log_likelihood = [self.px_z(self.qz_x(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
+        posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(1_000).float().log()
         posterior_predictive = posterior_predictive.mean()
         self.model_metrics.update(log_marginal, posterior_predictive)
 
     def on_test_epoch_end(self) -> None:
-        self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
         self.log_dict(self.model_metrics.compute(), on_epoch=True, prog_bar=True)
-        self.clustering_metrics.reset()
         self.model_metrics.reset()
 
     def configure_optimizers(self):

@@ -227,6 +227,8 @@ def fit_scvi(
     np.save(f'{checkpoint_dir}/valid_indices.npy', model.validation_indices.copy())
 
     embeddings = model.get_latent_representation()
+    torch.cuda.empty_cache()
+
     np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
     np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
 
@@ -322,6 +324,8 @@ def fit_model(
 
     embeddings = trainer.predict(model, DataLoader(ConcatDataset([ds_train, ds_valid]), shuffle=False, **dl_kwargs))
     embeddings = torch.vstack(embeddings).cpu().numpy()
+    torch.cuda.empty_cache()
+
     np.save(f'{checkpoint_dir}/embeddings.npy', embeddings)
     np.save(f'{checkpoint_dir}/mde.npy', scvi.model.utils.mde(embeddings))
 
