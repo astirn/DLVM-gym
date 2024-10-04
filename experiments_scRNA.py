@@ -187,18 +187,22 @@ def collate(batch, num_batches: int):
     return batch
 
 
-def fit_scvi(batch_size: int, dataset: str, learning_rate: float, checkpoint_dir: str, seed: int | None):
+def fit_scvi(
+        batch_size: int,
+        dataset: anndata.AnnData,
+        dataset_config: dict,
+        learning_rate: float,
+        checkpoint_dir: str,
+        seed: int | None
+):
     if seed is not None:
         torch.manual_seed(seed)
 
-    scvi_dataset = load_dataset(dataset)
-
-    scvi.model.SCVI.setup_anndata(scvi_dataset, layer='counts', batch_key='batch')
     model = scvi.model.SCVI(
-        adata=scvi_dataset,
+        adata=dataset,
         deeply_inject_covariates=False,
         log_variational=True,
-        **DATASET_CONFIG[dataset]
+        **dataset_config
     )
 
     torch.set_float32_matmul_precision('high')
@@ -233,7 +237,8 @@ def fit_scvi(batch_size: int, dataset: str, learning_rate: float, checkpoint_dir
 
 def fit_model(
         batch_size: int,
-        dataset: str,
+        dataset: anndata.AnnData,
+        dataset_config: dict,
         learning_rate: float,
         model_config: dict,
         checkpoint_dir: str,
@@ -247,23 +252,22 @@ def fit_model(
     else:
         g = None
 
-    scvi_dataset = load_dataset(dataset)
     i_train = np.load(f'{scvi_dir}/train_indices.npy')
     i_valid = np.load(f'{scvi_dir}/valid_indices.npy')
 
-    cell_types = np.unique(scvi_dataset.obs['cell_type'], return_inverse=True)[1]
-    n_batches = len(np.unique(scvi_dataset.obs['batch']))
-    n_cells = scvi_dataset.layers['counts'].shape[0]
-    n_genes = scvi_dataset.layers['counts'].shape[1]
+    cell_types = np.unique(dataset.obs['cell_type'], return_inverse=True)[1]
+    n_batches = len(np.unique(dataset.obs['batch']))
+    n_cells = dataset.layers['counts'].shape[0]
+    n_genes = dataset.layers['counts'].shape[1]
 
     ds_train = TensorDataset(
-        torch.tensor(scvi_dataset.layers['counts'][i_train]),
-        torch.LongTensor(scvi_dataset.obs['batch'].values[i_train]),
+        torch.tensor(dataset.layers['counts'][i_train]),
+        torch.LongTensor(dataset.obs['batch'].values[i_train]),
         torch.LongTensor(cell_types[i_train]),
     )
     ds_valid = TensorDataset(
-        torch.tensor(scvi_dataset.layers['counts'][i_valid]),
-        torch.LongTensor(scvi_dataset.obs['batch'].values[i_valid]),
+        torch.tensor(dataset.layers['counts'][i_valid]),
+        torch.LongTensor(dataset.obs['batch'].values[i_valid]),
         torch.LongTensor(cell_types[i_valid]),
     )
 
@@ -281,13 +285,13 @@ def fit_model(
 
     encoder = Encoder(
         dim_in=n_genes + n_batches,
-        dim_out=DATASET_CONFIG[dataset]['n_latent'],
-        **DATASET_CONFIG[dataset],
+        dim_out=dataset_config['n_latent'],
+        **dataset_config,
     )
     decoder = Decoder(
-        dim_in=DATASET_CONFIG[dataset]['n_latent'] + n_batches,
+        dim_in=dataset_config['n_latent'] + n_batches,
         dim_out=n_genes,
-        **DATASET_CONFIG[dataset]
+        **dataset_config
     )
     u_initial = next(iter(dl_train))
     u_initial = torch.concat([
@@ -298,7 +302,7 @@ def fit_model(
         n_cells=n_cells,
         n_genes=n_genes,
         n_batches=n_batches,
-        n_latent=DATASET_CONFIG[dataset]['n_latent'],
+        n_latent=dataset_config['n_latent'],
         encoder=encoder,
         decoder=decoder,
         u_initial=u_initial,
@@ -390,6 +394,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    data = load_dataset(args.dataset)
+
     results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
@@ -399,7 +405,14 @@ if __name__ == '__main__':
         scvi_checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI'
         os.makedirs(scvi_checkpoint_path, exist_ok=True)
         if not os.path.exists(f'{scvi_checkpoint_path}/DONE') or args.replace_results:
-            fit_scvi(args.batch_size, args.dataset, args.learning_rate, scvi_checkpoint_path, trial_seed)
+            fit_scvi(
+                args.batch_size,
+                data,
+                DATASET_CONFIG[args.dataset],
+                args.learning_rate,
+                scvi_checkpoint_path,
+                trial_seed
+            )
         plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, 'scVI.pdf')
 
         for config in TEST_CASES:
@@ -408,7 +421,8 @@ if __name__ == '__main__':
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 fit_model(
                     args.batch_size,
-                    args.dataset,
+                    data,
+                    DATASET_CONFIG[args.dataset],
                     args.learning_rate,
                     config,
                     checkpoint_path,
