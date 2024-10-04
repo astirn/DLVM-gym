@@ -8,12 +8,11 @@ import torch.nn as nn
 import torchvision.datasets as datasets
 import zlib
 
-from cytoolz import merge_with, keyfilter
+from cytoolz import merge_with
 from constants import TABLE_COLUMNS, TEST_CASES
 from pathlib import Path
-from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from utils import get_trainer, seed_worker
+from utils import get_data_loaders, get_trainer
 from models import VampPrior
 
 DIM_Z = 30
@@ -70,25 +69,11 @@ def collate(batch):
 def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: float, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
-        g = torch.Generator()
-        g.manual_seed(seed)
-    else:
-        g = None
 
     ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
     ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
 
-    dl_kwargs = {
-        'batch_size': batch_size,
-        'collate_fn': collate,
-        'generator': g,
-        'num_workers': 4,
-        'persistent_workers': True,
-        'pin_memory': False,
-        'worker_init_fn': seed_worker if seed is not None else None,
-    }
-    dl_train = DataLoader(ds_train, drop_last=True, shuffle=True, **dl_kwargs)
-    dl_valid = DataLoader(ds_valid, drop_last=False, shuffle=False, **dl_kwargs)
+    dl_train, dl_valid = get_data_loaders([ds_train, ds_valid], batch_size, collate, seed)
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
@@ -117,12 +102,12 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
     torch.cuda.empty_cache()
 
 
-def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+def test_model(batch_size, model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
     ds_test = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
-    dl_test = DataLoader(ds_test, batch_size=len(ds_test), collate_fn=collate, shuffle=False)
+    dl_test = get_data_loaders(ds_test, batch_size, collate, seed)
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
@@ -171,7 +156,7 @@ if __name__ == '__main__':
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 Path(f'{checkpoint_path}/DONE').unlink(missing_ok=True)
                 fit_model(args.batch_size, config, args.dataset, args.learning_rate, checkpoint_path, trial_seed)
-            trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
+            trial_results = test_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
 
     results_dir = f'results/clustering/{args.dataset}/{args.seed}'
