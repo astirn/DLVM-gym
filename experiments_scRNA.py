@@ -192,7 +192,7 @@ def dataloaders(
         dataset: anndata.AnnData,
         seed: int | None,
         split_dir: str = None
-) -> DataLoader | (DataLoader, DataLoader):
+):
     if seed is not None:
         g = torch.Generator()
         g.manual_seed(seed)
@@ -349,8 +349,29 @@ def fit_model(
     torch.cuda.empty_cache()
 
 
-def plot_mdes(dataset, checkpoint_dir, fig_path, fig_name):
-    data = load_dataset(dataset)
+def test_model(
+        batch_size: int,
+        dataset: anndata.AnnData,
+        checkpoint_dir: str,
+        seed: int | None,
+) -> (np.ndarray, np.ndarray):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
+
+    cell_embeddings, cluster_probabilities = trainer.predict(
+        SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_val_elbo.ckpt"),
+        dataloaders(batch_size, dataset, seed)
+    )
+
+    cell_embeddings = torch.vstack(cell_embeddings).cpu().numpy()
+    cluster_probabilities = torch.vstack(cluster_probabilities).cpu().numpy()
+
+    torch.cuda.empty_cache()
+
+    return cell_embeddings, cluster_probabilities
+
 
 def plot_mde(
         cell_embeddings: np.ndarray,
