@@ -205,7 +205,6 @@ def fit_scvi(
         **dataset_config
     )
 
-    torch.set_float32_matmul_precision('high')
     model.train(
         batch_size=batch_size,
         check_val_every_n_epoch=1,
@@ -397,6 +396,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=None)
 
     args = parser.parse_args()
+
+    torch.set_float32_matmul_precision('high')
 
     data = load_dataset(args.dataset)
 

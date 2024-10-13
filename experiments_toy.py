@@ -123,7 +123,6 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
         min_delta=0.01,
         patience=PATIENCE,
     )
-    torch.set_float32_matmul_precision('high')
     trainer.fit(model, train_dataloaders=dataloader)
 
     Path(f'{checkpoint_dir}/DONE').touch()
@@ -197,6 +196,8 @@ if __name__ == '__main__':
     parser.add_argument('--replace_results', action='store_true')
 
     args = parser.parse_args()
+
+    torch.set_float32_matmul_precision('high')
 
     toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
 

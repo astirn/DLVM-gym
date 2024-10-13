@@ -88,7 +88,6 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
         **model_config
     )
 
-    torch.set_float32_matmul_precision('high')
     trainer = get_trainer(
         early_stopping_metric='val_elbo',
         checkpoint_metrics=['train_elbo', 'val_elbo', 'nmi'],
@@ -145,6 +144,8 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=None)
 
     args = parser.parse_args()
+
+    torch.set_float32_matmul_precision('high')
 
     results = []
     for trial in range(1, args.num_trials + 1):
