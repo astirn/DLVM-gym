@@ -389,6 +389,8 @@ class SingleCellVampPrior(VampPrior):
             learning_rate=learning_rate,
             **kwargs
         )
+        self.save_hyperparameters()
+
         self.n_genes = n_genes
         self.log_px_zs = self.px_z  # renamed since decoder returns a log probability rather a distribution
 
@@ -421,4 +423,6 @@ class SingleCellVampPrior(VampPrior):
         return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
 
     def predict_step(self, batch, batch_idx):
-        return self.qz_x(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
+        cell_embeddings = self.qz_x(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
+        cluster_probabilities = self.qc_z(self.log_pz_c(cell_embeddings)).probs
+        return cell_embeddings, cluster_probabilities
