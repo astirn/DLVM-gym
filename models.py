@@ -69,8 +69,8 @@ class VampPrior(lightning.LightningModule):
             decoder: nn.Module,
             learning_rate: float,
             truncation_level: int,
+            u_initial: torch.Tensor,
             u_constraint: callable = None,
-            u_initial: torch.Tensor = None,
             categorical_prior: bool = False,
             decoupled_variance: bool = False,
             dirichlet_prior: bool = False,
@@ -91,10 +91,7 @@ class VampPrior(lightning.LightningModule):
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
         self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
-        self.u_uc = nn.Parameter(
-            torch.randn([self.k, self.dim_x]) if u_initial is None else u_initial,
-            requires_grad=True
-        )
+        self.u_uc = nn.Parameter(u_initial, requires_grad=True)
 
         self.categorical_prior = categorical_prior
         self.decoupled_variance = decoupled_variance

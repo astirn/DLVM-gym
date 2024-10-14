@@ -112,6 +112,7 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
         encoder=Encoder(dim_x=2, dim_z=1),
         decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
+        u_initial=next(iter(dataloader))['x'][:TRUNCATION_LEVEL],
         learning_rate=LEARNING_RATE,
         **model_config
     )
