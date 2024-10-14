@@ -85,7 +85,7 @@ class VampPrior(lightning.LightningModule):
         self.dim_z = dim_z
         self.num_data = num_data
 
-        self.qz_x = encoder
+        self.encoder = encoder
         self.px_z = decoder
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
@@ -160,7 +160,7 @@ class VampPrior(lightning.LightningModule):
 
     def pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
-        pz_c = self.qz_x(self.u_constraint(self.u_uc))
+        pz_c = self.encoder(self.u_constraint(self.u_uc))
         if self.decoupled_variance:
             return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z).exp()
         elif self.wishart_prior:
@@ -185,7 +185,7 @@ class VampPrior(lightning.LightningModule):
 
     def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
-        pz_c = self.qz_x(self.u_constraint(self.u_uc))
+        pz_c = self.encoder(self.u_constraint(self.u_uc))
         if self.wishart_prior:
             n, V = self.n_and_V()
             log_det = (
@@ -301,8 +301,7 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
-        x = batch['x']
-        qz_x = self.qz_x(x)
+        qz_x = self.encoder(batch)
         z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
@@ -340,7 +339,7 @@ class VampPrior(lightning.LightningModule):
         elbo = [self.evidence_lower_bound(batch)[0] for _ in range(1_000)]
         log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(1_000).float().log()
         log_marginal = log_marginal.mean()
-        log_likelihood = [self.px_z(self.qz_x(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
+        log_likelihood = [self.px_z(self.encoder(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
         posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(1_000).float().log()
         posterior_predictive = posterior_predictive.mean()
         self.model_metrics.update(log_marginal, posterior_predictive)

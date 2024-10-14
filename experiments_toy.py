@@ -138,7 +138,7 @@ def plot_results(data: TensorDataset, fig_path: str, model_path: str, seed: int 
 
     model = VampPrior.load_from_checkpoint(model_path, map_location='cpu')
 
-    cluster_probabilities = model.qc_z(model.log_pz_c(model.qz_x(x).sample())).probs
+    cluster_probabilities = model.qc_z(model.log_pz_c(model.encoder(x).sample())).probs
     cluster_assignments = cluster_probabilities.argmax(dim=1)
 
     z_plot = torch.linspace(start=-100, end=100, steps=5000).unsqueeze(dim=1)
