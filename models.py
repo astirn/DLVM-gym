@@ -86,7 +86,7 @@ class VampPrior(lightning.LightningModule):
         self.num_data = num_data
 
         self.encoder = encoder
-        self.px_z = decoder
+        self.decoder = decoder
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
         self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
@@ -308,7 +308,7 @@ class VampPrior(lightning.LightningModule):
         qc_z = self.qc_z(log_pz_c)
 
         elbo_locals = (
-            + self.px_z(z).log_prob(x).sum()
+            + self.decoder(z).log_prob(x).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)  # zero only for original VampPrior
         ) / x.shape[0]
@@ -339,7 +339,7 @@ class VampPrior(lightning.LightningModule):
         elbo = [self.evidence_lower_bound(batch)[0] for _ in range(1_000)]
         log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(1_000).float().log()
         log_marginal = log_marginal.mean()
-        log_likelihood = [self.px_z(self.encoder(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
+        log_likelihood = [self.decoder(self.encoder(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
         posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(1_000).float().log()
         posterior_predictive = posterior_predictive.mean()
         self.model_metrics.update(log_marginal, posterior_predictive)
@@ -362,37 +362,9 @@ class VampPrior(lightning.LightningModule):
 class SingleCellVampPrior(VampPrior):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.log_px_zs = self.px_z  # renamed since decoder returns a log probability rather a distribution
 
     def u_constraint(self, u_uc: torch.Tensor) -> torch.Tensor:
         return torch.concat([
-            u_uc[:, :self.hparams.num_genes],
+            F.softplus(u_uc[:, :self.hparams.num_genes]),
             F.softmax(u_uc[:, self.hparams.num_genes:], dim=1)
         ], dim=1)
-
-    def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
-        x, s = batch['x'], batch['s']
-        qz_x = self.qz_x(torch.concat([x.log1p(), s], dim=1))
-        z = qz_x.rsample()
-
-        log_pz_c = self.log_pz_c(z)
-        qc_z = self.qc_z(log_pz_c)
-
-        elbo_locals = (
-            + self.log_px_zs(x, z, s).sum()
-            - self.dkl_z(qz_x, qc_z, log_pz_c)
-            - self.dkl_c(qc_z)  # zero only for original VampPrior
-        ) / x.shape[0]
-        elbo_globals = (
-            - self.dkl_pi()  # zero unless Dirichlet prior
-            - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
-        ) / self.num_data
-        elbo = elbo_locals + elbo_globals
-
-        return elbo, {'qz_x': qz_x, 'qc_z': qc_z}
-
-    def predict_step(self, batch, batch_idx):
-        cell_embeddings = self.qz_x(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
-        cluster_probabilities = self.qc_z(self.log_pz_c(cell_embeddings)).probs
-        return dict(cell_embeddings=cell_embeddings, cluster_probabilities=cluster_probabilities)
