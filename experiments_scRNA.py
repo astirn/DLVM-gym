@@ -279,11 +279,7 @@ def fit_scvi(
 
     np.save(f'{checkpoint_dir}/train_indices.npy', model.train_indices.copy())
     np.save(f'{checkpoint_dir}/valid_indices.npy', model.validation_indices.copy())
-
-    cell_embeddings = model.get_latent_representation()
-    torch.cuda.empty_cache()
-
-    np.save(f'{checkpoint_dir}/cell_embeddings.npy', cell_embeddings)
+    np.save(f'{checkpoint_dir}/cell_embeddings.npy', model.get_latent_representation())
 
     Path(f'{checkpoint_dir}/DONE').touch()
 
