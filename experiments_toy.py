@@ -106,7 +106,6 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
     )
 
     model = VampPrior(
-        dim_x=2,
         dim_z=1,
         num_data=len(data),
         encoder=Encoder(dim_x=2, dim_z=1),

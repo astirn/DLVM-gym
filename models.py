@@ -62,7 +62,6 @@ class VampPrior(lightning.LightningModule):
 
     def __init__(
             self,
-            dim_x: int,
             dim_z: int,
             num_data: int,
             encoder: nn.Module,
@@ -82,7 +81,6 @@ class VampPrior(lightning.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.dim_x = dim_x
         self.dim_z = dim_z
         self.num_data = num_data
 

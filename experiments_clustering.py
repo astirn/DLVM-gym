@@ -77,7 +77,6 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: 
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
-        dim_x=data_dim,
         dim_z=DIM_Z,
         num_data=len(ds_train),
         encoder=Encoder(dim_x=data_dim, dim_z=DIM_Z),
