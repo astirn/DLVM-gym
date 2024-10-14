@@ -348,6 +348,11 @@ class VampPrior(lightning.LightningModule):
         self.log_dict(self.model_metrics.compute(), on_epoch=True, prog_bar=True)
         self.model_metrics.reset()
 
+    def predict_step(self, batch, batch_idx):
+        embeddings = self.encoder(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
+        cluster_probabilities = self.qc_z(self.log_pz_c(embeddings)).probs
+        return dict(embeddings=embeddings, cluster_probabilities=cluster_probabilities)
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
             self.parameters(),
