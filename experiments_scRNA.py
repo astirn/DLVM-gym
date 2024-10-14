@@ -325,10 +325,9 @@ def fit_model(
         u_initial['s'][:TRUNCATION_LEVEL]
     ], dim=1)
     model = SingleCellVampPrior(
-        n_cells=n_cells,
-        n_genes=n_genes,
-        n_batches=n_batches,
-        n_latent=dataset_config['n_latent'],
+        dim_z=dataset_config['n_latent'],
+        num_data=n_cells,
+        num_genes=n_genes,
         encoder=encoder,
         decoder=decoder,
         u_initial=u_initial,
@@ -362,9 +361,7 @@ def test_model(
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
     cell_embeddings, cluster_probabilities = trainer.predict(
-        SingleCellVampPrior.load_from_checkpoint(
-            f"{checkpoint_dir}/best_val_elbo.ckpt",
-        ),
+        SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_val_elbo.ckpt"),
         dataloaders(batch_size, dataset, seed)
     )
 

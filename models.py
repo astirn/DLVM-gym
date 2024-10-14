@@ -76,6 +76,7 @@ class VampPrior(lightning.LightningModule):
             dirichlet_process: bool = False,
             dirichlet_process_variational_family: bool = False,
             wishart_prior: bool = False,
+            **kwargs
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
         super().__init__()
@@ -360,39 +361,14 @@ class VampPrior(lightning.LightningModule):
 
 
 class SingleCellVampPrior(VampPrior):
-    def __init__(
-            self,
-            n_cells: int,
-            n_genes: int,
-            n_batches: int,
-            n_latent: int,
-            encoder: callable,
-            decoder: callable,
-            truncation_level: int,
-            learning_rate: float,
-            **kwargs,
-    ):
-        VampPrior.__init__(
-            self,
-            dim_x=n_genes + n_batches,  # only genes are modelled, but this sets the pseudo-input dimension
-            dim_z=n_latent,
-            num_data=n_cells,
-            u_constraint=self.u_constraint,
-            encoder=encoder,
-            decoder=decoder,
-            truncation_level=truncation_level,
-            learning_rate=learning_rate,
-            **kwargs
-        )
-        self.save_hyperparameters()
-
-        self.n_genes = n_genes
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.log_px_zs = self.px_z  # renamed since decoder returns a log probability rather a distribution
 
     def u_constraint(self, u_uc: torch.Tensor) -> torch.Tensor:
         return torch.concat([
-            u_uc[:, :self.n_genes],
-            F.softmax(u_uc[:, self.n_genes:], dim=1)
+            u_uc[:, :self.hparams.num_genes],
+            F.softmax(u_uc[:, self.hparams.num_genes:], dim=1)
         ], dim=1)
 
     def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
