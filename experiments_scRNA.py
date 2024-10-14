@@ -199,9 +199,6 @@ def dataloaders(
     else:
         g = None
 
-    i_train = np.load(f'{split_dir}/train_indices.npy')
-    i_valid = np.load(f'{split_dir}/valid_indices.npy')
-
     cell_types = np.unique(dataset.obs['cell_type'], return_inverse=True)[1]
 
     dl_kwargs = {
@@ -224,6 +221,9 @@ def dataloaders(
         return DataLoader(ds, drop_last=False, shuffle=False, **dl_kwargs)
 
     else:
+        i_train = np.load(f'{split_dir}/train_indices.npy')
+        i_valid = np.load(f'{split_dir}/valid_indices.npy')
+
         ds_train = TensorDataset(
             torch.tensor(dataset.layers['counts'][i_train]),
             torch.LongTensor(dataset.obs['batch'].values[i_train]),
@@ -252,6 +252,7 @@ def fit_scvi(
     if seed is not None:
         torch.manual_seed(seed)
 
+    scvi.model.SCVI.setup_anndata(dataset, layer='counts', batch_key='batch')
     model = scvi.model.SCVI(
         adata=dataset,
         deeply_inject_covariates=False,
