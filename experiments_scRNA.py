@@ -81,7 +81,8 @@ class Encoder(nn.Module):
         self.mu = nn.Linear(n_hidden, dim_out)
         self.log_sigma = nn.Linear(n_hidden, dim_out)
 
-    def forward(self, xs: torch.Tensor) -> dist.MultivariateNormal:
+    def forward(self, batch: dict[str, torch.Tensor]) -> dist.MultivariateNormal:
+        xs = torch.concat([batch['x'].log1p(), batch['s']], dim=1)
         out = self.net(xs)
         mu = self.mu(out)
         sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
@@ -107,7 +108,8 @@ class Decoder(nn.Module):
         )
         self.fh = nn.Linear(dims[-1], dim_out)
 
-    def forward(self, x: torch.Tensor, z: torch.Tensor, s: torch.Tensor, eps=1e-8):
+    def forward(self, z: torch.Tensor, batch: dict[str, torch.Tensor], eps=1e-8):
+        x, s = batch['x'], batch['s']
         out = self.net(torch.concat([z, s], dim=1))
         mu = self.fw(out) * x.sum(dim=1, keepdim=True)
         theta = self.log_theta.exp()
