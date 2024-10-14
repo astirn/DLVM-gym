@@ -396,4 +396,4 @@ class SingleCellVampPrior(VampPrior):
     def predict_step(self, batch, batch_idx):
         cell_embeddings = self.qz_x(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
         cluster_probabilities = self.qc_z(self.log_pz_c(cell_embeddings)).probs
-        return cell_embeddings, cluster_probabilities
+        return dict(cell_embeddings=cell_embeddings, cluster_probabilities=cluster_probabilities)

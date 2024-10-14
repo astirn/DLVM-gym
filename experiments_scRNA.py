@@ -356,17 +356,15 @@ def test_model(
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
-    cell_embeddings, cluster_probabilities = trainer.predict(
+    predictions = trainer.predict(
         SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_val_elbo.ckpt"),
         dataloaders(batch_size, dataset, seed)
     )
-
-    cell_embeddings = torch.vstack(cell_embeddings).cpu().numpy()
-    cluster_probabilities = torch.vstack(cluster_probabilities).cpu().numpy()
+    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
 
     torch.cuda.empty_cache()
 
-    return cell_embeddings, cluster_probabilities
+    return predictions.values()
 
 
 def plot_mde(
@@ -482,7 +480,18 @@ if __name__ == '__main__':
                     trial_seed,
                     scvi_dir,
                 )
-        #     plot_mdes(args.dataset, scvi_checkpoint_path, results_dir, f'{str(config)}.pdf')
+            plot_mde(
+                *test_model(
+                    args.batch_size,
+                    data,
+                    checkpoint_path,
+                    trial_seed,
+                ),
+                data,
+                results_dir,
+                f'{str(config)}.pdf',
+                trial_seed
+            )
 
     # results_dir = f'results/scRNA/{args.dataset}/{args.seed}'
     # os.makedirs(results_dir, exist_ok=True)
