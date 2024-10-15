@@ -20,8 +20,9 @@ LEARNING_RATE = 5e-4
 PATIENCE = 1_000
 TRUNCATION_LEVEL = 40
 
+
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int,):
+    def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, HIDDEN_DIM),
@@ -30,8 +31,8 @@ class Encoder(nn.Module):
         self.mu = nn.Linear(HIDDEN_DIM, dim_z)
         self.sigma_uc = nn.Linear(HIDDEN_DIM, dim_z)
 
-    def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(x)
+    def forward(self, batch: dict[str, torch.Tensor]) -> dist.MultivariateNormal:
+        out = self.net(batch['x'])
         mu = self.mu(out)
         sigma = self.sigma_uc(out).exp()
         return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(sigma))
@@ -47,11 +48,11 @@ class Decoder(nn.Module):
         )
         self.sigma_uc = nn.Parameter(torch.as_tensor(0.0))
 
-    def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), scale=self.sigma_uc.exp() ** 0.5), 1)
+    def forward(self, z: torch.Tensor, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+        return dist.Independent(dist.Normal(self.mu(z), scale=self.sigma_uc.exp() ** 0.5), 1).log_prob(batch['x'])
 
 
-def generate_toy_data(dataset: str, num_samples: int, seed: int | None):
+def generate_data(dataset: str, num_samples: int, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
@@ -94,20 +95,30 @@ def collate(batch):
     return batch
 
 
-def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed: int | None):
+def get_dataloader(dataset: TensorDataset, seed: int | None) -> DataLoader:
     if seed is not None:
-        torch.manual_seed(seed)
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        g = None
 
-    dataloader = DataLoader(
-        data,
-        batch_size=len(data),
+    return DataLoader(
+        dataset,
+        batch_size=len(dataset),
         collate_fn=collate,
+        generator=g,
         shuffle=True
     )
 
+def fit_model(model_config: dict, dataset: TensorDataset, checkpoint_dir: str, seed: int | None):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    dataloader = get_dataloader(dataset, seed)
+
     model = VampPrior(
         dim_z=1,
-        num_data=len(data),
+        num_data=len(dataset),
         encoder=Encoder(dim_x=2, dim_z=1),
         decoder=Decoder(dim_x=2, dim_z=1),
         truncation_level=TRUNCATION_LEVEL,
@@ -130,11 +141,11 @@ def fit_model(model_config: dict, data: TensorDataset, checkpoint_dir: str, seed
     torch.cuda.empty_cache()
 
 
-def plot_results(data: TensorDataset, fig_path: str, model_path: str, seed: int | None):
+def plot_results(dataset: TensorDataset, fig_path: str, model_path: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    x = data.tensors[0]
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
     model = VampPrior.load_from_checkpoint(model_path, map_location='cpu')
 
