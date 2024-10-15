@@ -308,10 +308,10 @@ class VampPrior(lightning.LightningModule):
         qc_z = self.qc_z(log_pz_c)
 
         elbo_locals = (
-            + self.decoder(z).log_prob(x).sum()
+            + self.decoder(z, batch).sum()
             - self.dkl_z(qz_x, qc_z, log_pz_c)
             - self.dkl_c(qc_z)  # zero only for original VampPrior
-        ) / x.shape[0]
+        ) / z.shape[0]
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
@@ -349,7 +349,7 @@ class VampPrior(lightning.LightningModule):
         self.model_metrics.reset()
 
     def predict_step(self, batch, batch_idx):
-        embeddings = self.encoder(torch.concat([batch['x'].log1p(), batch['s']], dim=1)).mean
+        embeddings = self.encoder(batch).mean
         cluster_probabilities = self.qc_z(self.log_pz_c(embeddings)).probs
         return dict(embeddings=embeddings, cluster_probabilities=cluster_probabilities)
 
@@ -367,6 +367,7 @@ class VampPrior(lightning.LightningModule):
 class SingleCellVampPrior(VampPrior):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        delattr(self, 'u_constraint')  # needed to override lambda x: x default in super
 
     def u_constraint(self, u_uc: torch.Tensor) -> dict[str, torch.Tensor]:
         return dict(
