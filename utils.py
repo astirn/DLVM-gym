@@ -4,28 +4,6 @@ import lightning.pytorch.callbacks as callbacks
 import random
 import torch
 
-from torch.utils.data import DataLoader, Dataset
-
-
-def get_data_loaders(data: Dataset | list[Dataset], batch_size: int, collate: callable, seed: int = None):
-    if seed is not None:
-        g = torch.Generator()
-        g.manual_seed(seed)
-    else:
-        g = None
-
-    dl_kwargs = {
-        'batch_size': batch_size,
-        'collate_fn': collate,
-        'generator': g,
-        'num_workers': 4,
-        'persistent_workers': True,
-        'pin_memory': True,
-        'worker_init_fn': seed_worker if seed is not None else None,
-    }
-
-    return tuple(DataLoader(d, **dl_kwargs) for d in data) if isinstance(data, list) else DataLoader(data, **dl_kwargs)
-
 
 def get_trainer(
         early_stopping_metric: str = None,
