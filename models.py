@@ -89,7 +89,7 @@ class VampPrior(lightning.LightningModule):
         self.decoder = decoder
 
         self.k = nn.Parameter(torch.as_tensor(truncation_level), requires_grad=False)
-        self.u_constraint = (lambda x: x) if u_constraint is None else u_constraint
+        self.u_constraint = (lambda x: dict(x=x)) if u_constraint is None else u_constraint
         self.u_uc = nn.Parameter(u_initial, requires_grad=True)
 
         self.categorical_prior = categorical_prior
