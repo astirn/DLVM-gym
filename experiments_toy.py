@@ -110,6 +110,7 @@ def get_dataloader(dataset: TensorDataset, seed: int | None) -> DataLoader:
         shuffle=True
     )
 
+
 def fit_model(model_config: dict, dataset: TensorDataset, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
@@ -141,16 +142,16 @@ def fit_model(model_config: dict, dataset: TensorDataset, checkpoint_dir: str, s
     torch.cuda.empty_cache()
 
 
-def plot_results(dataset: TensorDataset, fig_path: str, model_path: str, seed: int | None):
+def plot_results(dataset: TensorDataset, checkpoint_dir: str, fig_path: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
-    model = VampPrior.load_from_checkpoint(model_path, map_location='cpu')
-
-    cluster_probabilities = model.qc_z(model.log_pz_c(model.encoder(x).sample())).probs
-    cluster_assignments = cluster_probabilities.argmax(dim=1)
+    model = VampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_train_elbo.ckpt")
+    predictions = trainer.predict(model, get_dataloader(dataset, seed))
+    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
+    cluster_assignments = predictions['cluster_probabilities'].argmax(axis=1)
 
     z_plot = torch.linspace(start=-100, end=100, steps=5000).unsqueeze(dim=1)
     pc_model = model.pc()
@@ -169,8 +170,8 @@ def plot_results(dataset: TensorDataset, fig_path: str, model_path: str, seed: i
     ax.set_ylabel('$x_2$')
     ax.set_yticks([])
     sns.scatterplot(
-        x=x[:, 0],
-        y=x[:, 1],
+        x=dataset.tensors[0][:, 0],
+        y=dataset.tensors[0][:, 1],
         hue=cluster_assignments,
         hue_order=range(model.k),
         palette=COLOR_PALETTE,
@@ -210,18 +211,27 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    toy_data = generate_toy_data(args.dataset, args.num_samples, args.seed)
+    toy_data = f'experiments/toy/{args.dataset}/{args.seed}/toy_data.pt'
+    if not os.path.exists(toy_data):
+        torch.save(
+            generate_data(args.dataset, args.num_samples, args.seed),
+            toy_data
+        )
+    toy_data = torch.load(toy_data)
+
+    results_dir = f'results/toy/{args.dataset}/{args.seed}'
+    os.makedirs(results_dir, exist_ok=True)
 
     for config in TEST_CASES:
-        checkpoint_path = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
-        os.makedirs(checkpoint_path, exist_ok=True)
-        if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
-            fit_model(config, toy_data, checkpoint_path, args.seed)
-        results_dir = f'results/toy/{args.dataset}/{args.seed}'
-        os.makedirs(results_dir, exist_ok=True)
+        config_dir = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
+        os.makedirs(config_dir, exist_ok=True)
+
+        if not os.path.exists(f'{config_dir}/DONE') or args.replace_results:
+            fit_model(config, toy_data, config_dir, args.seed)
+
         plot_results(
-            data=toy_data,
+            dataset=toy_data,
+            checkpoint_dir=config_dir,
             fig_path=f'{results_dir}/{str(config)}.pdf',
-            model_path=f'{checkpoint_path}/best_train_elbo.ckpt',
             seed=args.seed
         )
