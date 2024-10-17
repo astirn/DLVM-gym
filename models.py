@@ -339,7 +339,8 @@ class VampPrior(lightning.LightningModule):
         elbo = [self.evidence_lower_bound(batch)[0] for _ in range(1_000)]
         log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(1_000).float().log()
         log_marginal = log_marginal.mean()
-        log_likelihood = [self.decoder(self.encoder(batch['x']).rsample()).log_prob(batch['x']) for _ in range(1_000)]
+        qz_x = self.encoder(batch)
+        log_likelihood = [self.decoder(qz_x.rsample(), batch) for _ in range(1_000)]
         posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(1_000).float().log()
         posterior_predictive = posterior_predictive.mean()
         self.model_metrics.update(log_marginal, posterior_predictive)
