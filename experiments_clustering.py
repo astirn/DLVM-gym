@@ -11,13 +11,15 @@ import zlib
 from cytoolz import merge_with
 from constants import TABLE_COLUMNS, TEST_CASES
 from pathlib import Path
+from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
-from utils import get_data_loaders, get_trainer
+from utils import get_trainer, seed_worker
 from models import VampPrior
 
 DIM_Z = 30
 PATIENCE = 10
 TRUNCATION_LEVEL = 100
+
 
 class Encoder(nn.Module):
     def __init__(self, dim_x: int, dim_z: int,):
@@ -33,8 +35,8 @@ class Encoder(nn.Module):
         self.mu = nn.Linear(2000, dim_z)
         self.sigma_uc = nn.Linear(2000, dim_z)
 
-    def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(x)
+    def forward(self, batch: dict[str, torch.Tensor]) -> dist.MultivariateNormal:
+        out = self.net(batch['x'])
         mu = self.mu(out)
         sigma = self.sigma_uc(out).exp()
         return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(sigma))
@@ -54,8 +56,14 @@ class Decoder(nn.Module):
         )
         self.sigma_uc = nn.Parameter(torch.as_tensor(0.0))
 
-    def forward(self, x: torch.Tensor) -> dist.Distribution:
-        return dist.Independent(dist.Normal(self.mu(x), scale=self.sigma_uc.exp() ** 0.5), 1)
+    def forward(self, z: torch.Tensor, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+        return dist.Independent(dist.Normal(self.mu(z), scale=self.sigma_uc.exp() ** 0.5), 1).log_prob(batch['x'])
+
+
+def load_dataset(dataset: str) -> (Dataset, Dataset):
+    ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
+    ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
+    return ds_train, ds_valid
 
 
 def collate(batch):
@@ -66,14 +74,32 @@ def collate(batch):
     return batch
 
 
+def get_dataloaders(ds_train: Dataset, ds_valid: Dataset, batch_size: int, seed: int | None):
+    if seed is not None:
+        g = torch.Generator()
+        g.manual_seed(seed)
+    else:
+        g = None
+
+    dl_kwargs = {
+        'batch_size': batch_size,
+        'collate_fn': collate,
+        'generator': g,
+        'num_workers': 4,
+        'persistent_workers': True,
+        'pin_memory': True,
+        'worker_init_fn': seed_worker if seed is not None else None,
+    }
+
+    return DataLoader(ds_train, shuffle=True, **dl_kwargs), DataLoader(ds_valid, shuffle=False, **dl_kwargs)
+
+
 def fit_model(batch_size: int, model_config: dict, dataset: str, learning_rate: float, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    ds_train = getattr(datasets, dataset)(root='data', train=True, download=True, transform=ToTensor())
-    ds_valid = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
-
-    dl_train, dl_valid = get_data_loaders([ds_train, ds_valid], batch_size, collate, seed)
+    ds_train, ds_valid = load_dataset(dataset)
+    dl_train, dl_valid = get_dataloaders(ds_train, ds_valid, batch_size, seed)
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
@@ -104,16 +130,15 @@ def test_model(batch_size, model_config: dict, dataset: str, checkpoint_dir: str
     if seed is not None:
         torch.manual_seed(seed)
 
-    ds_test = getattr(datasets, dataset)(root='data', train=False, download=True, transform=ToTensor())
-    dl_test = get_data_loaders(ds_test, batch_size, collate, seed)
+    _, ds_test = get_dataloaders(*load_dataset(dataset), batch_size, seed)
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
     model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
-    model_results = trainer.test(model, dl_test)[0]
+    model_results = trainer.test(model, ds_test)[0]
 
     model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_nmi.ckpt')
-    clustering_results = trainer.validate(model, dl_test)[0]
+    clustering_results = trainer.validate(model, ds_test)[0]
 
     torch.cuda.empty_cache()
 
