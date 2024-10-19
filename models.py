@@ -96,8 +96,8 @@ class VampPrior(lightning.LightningModule):
         self.decoupled_variance = decoupled_variance
         self.dirichlet_prior = dirichlet_prior
         self.dirichlet_process = dirichlet_process
-        self.wishart_prior = wishart_prior
         self.dirichlet_process_variational_family = dirichlet_process_variational_family
+        self.wishart_prior = wishart_prior
 
         # variational parameters for cluster proportions
         alpha = torch.ones(self.k)
