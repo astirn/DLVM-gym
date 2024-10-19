@@ -276,17 +276,18 @@ class VampPrior(lightning.LightningModule):
             with torch.no_grad():
                 covariance = torch.cov(qz_x.rsample().T)
             if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
-                covariance_proportions = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
+                cluster_probs = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
             elif self.dirichlet_process:
                 v = dist.Beta(*self.alpha_and_beta()).rsample()[:-1]
                 one = torch.ones_like(v)[:1]
                 v = torch.concat([v, one])
                 one_minus_v = 1 - v
-                covariance_proportions = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
+                cluster_probs = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
             else:
-                covariance_proportions = 1 / self.k[None]
             covariance_proportions = torch.clamp_min(covariance_proportions ** (1 / self.dim_z), 0.01)
             V_p_inv = n_p * covariance * covariance_proportions[:, None, None]
+                cluster_probs = 1 / self.k[None]
+
 
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
