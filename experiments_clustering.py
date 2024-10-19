@@ -22,7 +22,7 @@ TRUNCATION_LEVEL = 100
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int,):
+    def __init__(self, dim_x: int, dim_z: int):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
