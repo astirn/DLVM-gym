@@ -268,7 +268,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, qz_x):
+    def dkl_Lambda(self, z):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
 
