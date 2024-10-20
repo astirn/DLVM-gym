@@ -283,9 +283,16 @@ class VampPrior(lightning.LightningModule):
             else:
                 cluster_probs = 1 / self.k[None]
 
-            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
+            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
             with torch.no_grad():
-                V_p_inv = n_p * torch.cov(qz_x.rsample().T) * cluster_probs[:, None, None] ** (2 / self.dim_z)
+                if self.dim_z == 1:
+                    Q = torch.eye(1).to(z.device)
+                    L = torch.var(z)[None]
+                else:
+                    L, Q = torch.linalg.eigh(torch.cov(z.T))
+            L = L * cluster_probs[:, None] ** (1 / self.dim_z)
+            L = torch.clamp_min(L, 1e-2)
+            V_p_inv = n_p * Q @ L.diag_embed() @ Q.T
 
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
@@ -314,7 +321,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
+            - self.dkl_Lambda(z)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
