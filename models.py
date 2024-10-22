@@ -267,33 +267,43 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, qz_x: dist.MultivariateNormal):
+    def dkl_Lambda(self, pz_c, qc_z, z):
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
 
-            if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
-                cluster_probs = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
-            elif self.dirichlet_process:
-                v = dist.Beta(*self.alpha_and_beta()).rsample()[:-1]
-                one = torch.ones_like(v)[:1]
-                v = torch.concat([v, one])
-                one_minus_v = 1 - v
-                cluster_probs = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
-            else:
-                cluster_probs = 1 / self.k[None]
+            n_p = torch.as_tensor(self.dim_z + 2).to(n_q.device)
+            # with torch.no_grad():
+            residuals = z.unsqueeze(1) - pz_c.mean.unsqueeze(0)
+            covariance_j = residuals.unsqueeze(-1) @ residuals.unsqueeze(-2)
+            covariance_j = (qc_z.probs[:,: , None, None] * covariance_j).sum(dim=0)
+            covariance_j = covariance_j / qc_z.probs.sum(dim=0)[:, None, None]
+            covariance_j = covariance_j + torch.eye(self.dim_z).to(covariance_j.device) * 0.01
+            # covariance_j = covariance_j + pz_c.covaria3nce_matrix
+            V_p_inv = covariance_j * n_p
 
-            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
-            with torch.no_grad():
-                min_var = qz_x.covariance_matrix.diagonal(dim1=-2, dim2=-1).min()
-                if self.dim_z == 1:
-                    L = torch.var(qz_x.rsample())[None]
-                    Q = torch.eye(1).to(L.device)
-                else:
-                    L, Q = torch.linalg.eigh(torch.cov(qz_x.rsample().T))
-
-            L = L * cluster_probs[:, None] ** (2 / self.dim_z)
-            L = torch.clamp_min(L, min_var)
-            V_p_inv = n_p * Q @ L.diag_embed() @ Q.T
+            # if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
+            #     cluster_probs = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
+            # elif self.dirichlet_process:
+            #     v = dist.Beta(*self.alpha_and_beta()).rsample()[:-1]
+            #     one = torch.ones_like(v)[:1]
+            #     v = torch.concat([v, one])
+            #     one_minus_v = 1 - v
+            #     cluster_probs = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
+            # else:
+            #     cluster_probs = 1 / self.k[None]
+            #
+            #
+            # with torch.no_grad():
+            #     min_var = qz_x.covariance_matrix.diagonal(dim1=-2, dim2=-1).mean()
+            #     if self.dim_z == 1:
+            #         L = torch.var(qz_x.rsample())[None]
+            #         Q = torch.eye(1).to(L.device)
+            #     else:
+            #         L, Q = torch.linalg.eigh(torch.cov(qz_x.rsample().T))
+            #
+            # L = L * cluster_probs[:, None] ** (1 / self.dim_z)
+            # L = torch.clamp_min(L, min_var)
+            # V_p_inv = Q @ L.diag_embed() @ Q.T
 
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
@@ -323,7 +333,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_x)  # zero unless Wishart prior
+            - self.dkl_Lambda(pz_c, qc_z, z)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
