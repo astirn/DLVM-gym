@@ -183,9 +183,8 @@ class VampPrior(lightning.LightningModule):
         else:
             return pz_c.log_prob(z).exp()
 
-    def log_pz_c(self, z: torch.Tensor) -> torch.Tensor:
+    def log_pz_c(self, pz_c: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
-        pz_c = self.encoder(self.u_constraint(self.u_uc))
         if self.wishart_prior:
             n, V = self.n_and_V()
             log_det = (
@@ -309,10 +308,11 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
+        pz_c = self.encoder(self.u_constraint(self.u_uc))
         qz_x = self.encoder(batch)
         z = qz_x.rsample()
 
-        log_pz_c = self.log_pz_c(z)
+        log_pz_c = self.log_pz_c(pz_c, z)
         qc_z = self.qc_z(log_pz_c)
 
         elbo_locals = (
