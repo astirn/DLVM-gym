@@ -318,11 +318,11 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def evidence_lower_bound(self, batch: dict[str, torch.Tensor]) -> (torch.Tensor, dict[str, dist.Distribution]):
-        pz_c = self.encoder(self.u_constraint(self.u_uc))
+        qz_u = self.encoder(self.u_constraint(self.u_uc))
         qz_x = self.encoder(batch)
         z = qz_x.rsample()
 
-        log_pz_c = self.log_pz_c(pz_c, z)
+        log_pz_c = self.log_pz_c(qz_u, z)
         qc_z = self.qc_z(log_pz_c)
 
         elbo_locals = (
@@ -333,7 +333,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(pz_c, qc_z, z)  # zero unless Wishart prior
+            - self.dkl_Lambda(qz_u, qc_z, z)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
