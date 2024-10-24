@@ -160,17 +160,17 @@ class VampPrior(lightning.LightningModule):
 
     def pz_c(self, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
-        pz_c = self.encoder(self.u_constraint(self.u_uc))
+        qz_u = self.encoder(self.u_constraint(self.u_uc))
         if self.decoupled_variance:
-            return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z).exp()
+            return dist.MultivariateNormal(loc=qz_u.loc, precision_matrix=self.n_and_V()[1]).log_prob(z).exp()
         elif self.wishart_prior:
             n, V = self.n_and_V()
             nu = n - self.dim_z + 1
             Lambda = (nu[:, None, None] * V)
             quadratic = torch.squeeze(
-                torch.unsqueeze(z - pz_c.mean, dim=2)
+                torch.unsqueeze(z - qz_u.mean, dim=2)
                 @ Lambda @
-                torch.unsqueeze(z - pz_c.mean, dim=3)
+                torch.unsqueeze(z - qz_u.mean, dim=3)
             )
             ll = (
                 + torch.lgamma((nu + self.dim_z) / 2)
@@ -181,9 +181,9 @@ class VampPrior(lightning.LightningModule):
             )
             return ll.exp()
         else:
-            return pz_c.log_prob(z).exp()
+            return qz_u.log_prob(z).exp()
 
-    def log_pz_c(self, pz_c: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor:
+    def log_pz_c(self, qz_u: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor:
         z = z[:, None]
         if self.wishart_prior:
             n, V = self.n_and_V()
@@ -192,7 +192,7 @@ class VampPrior(lightning.LightningModule):
                     self.dim_z * torch.log(torch.as_tensor(2)) +
                     torch.linalg.slogdet(V).logabsdet
             )
-            residuals = z - pz_c.mean
+            residuals = z - qz_u.mean
             quadratic = torch.squeeze(
                 torch.unsqueeze(residuals, dim=2)
                 @ (n[:, None, None] * V) @
@@ -200,9 +200,9 @@ class VampPrior(lightning.LightningModule):
             )
             return -0.5 * (self.dim_z * torch.log(torch.as_tensor(2 * torch.pi)) - log_det + quadratic)
         elif self.decoupled_variance:
-            return dist.MultivariateNormal(loc=pz_c.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
+            return dist.MultivariateNormal(loc=qz_u.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
-            return pz_c.log_prob(z)
+            return qz_u.log_prob(z)
 
     def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
         alpha, beta = self.alpha_and_beta()
