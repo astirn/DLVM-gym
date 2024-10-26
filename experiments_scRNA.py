@@ -460,7 +460,7 @@ if __name__ == '__main__':
                 trial_seed
             )
         plot_mde(
-            np.load(f'{scvi_dir}/embeddings.npy'),
+            np.load(f'{scvi_dir}/cell_embeddings.npy'),
             None,
             data,
             results_dir,
