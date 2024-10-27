@@ -211,7 +211,10 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    toy_data = f'experiments/toy/{args.dataset}/{args.seed}/toy_data.pt'
+    experiment_dir = f'experiments/toy/{args.dataset}/{args.seed}'
+    os.makedirs(experiment_dir, exist_ok=True)
+
+    toy_data = f'{experiment_dir}/toy_data.pt'
     if not os.path.exists(toy_data):
         torch.save(
             generate_data(args.dataset, args.num_samples, args.seed),
