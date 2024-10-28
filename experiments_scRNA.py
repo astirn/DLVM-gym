@@ -189,7 +189,7 @@ def collate(batch, num_batches: int):
     return batch
 
 
-def dataloaders(
+def get_dataloaders(
         batch_size: int,
         dataset: anndata.AnnData,
         seed: int | None,
@@ -305,7 +305,7 @@ def fit_model(
     n_cells = dataset.layers['counts'].shape[0]
     n_genes = dataset.layers['counts'].shape[1]
 
-    dl_train, dl_valid = dataloaders(batch_size, dataset, seed, split_dir)
+    dl_train, dl_valid = get_dataloaders(batch_size, dataset, seed, split_dir)
 
     encoder = Encoder(
         dim_in=n_genes + n_batches,
@@ -360,7 +360,7 @@ def test_model(
 
     predictions = trainer.predict(
         SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_val_elbo.ckpt"),
-        dataloaders(batch_size, dataset, seed)
+        get_dataloaders(batch_size, dataset, seed)
     )
     predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
 
