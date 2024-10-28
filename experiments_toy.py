@@ -107,7 +107,7 @@ def get_dataloader(dataset: TensorDataset, seed: int | None) -> DataLoader:
         batch_size=len(dataset),
         collate_fn=collate,
         generator=g,
-        shuffle=True
+        shuffle=False,
     )
 
 
