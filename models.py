@@ -345,7 +345,8 @@ class VampPrior(lightning.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         embeddings = self.encoder(batch).mean
-        cluster_probabilities = self.qc_z(self.log_pz_c(embeddings)).probs
+        qz_u = self.encoder(self.u_constraint(self.u_uc))
+        cluster_probabilities = self.qc_z(self.log_pz_c(qz_u, embeddings)).probs
         return dict(embeddings=embeddings, cluster_probabilities=cluster_probabilities)
 
     def configure_optimizers(self):
