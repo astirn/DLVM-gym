@@ -233,7 +233,7 @@ class VampPrior(lightning.LightningModule):
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
         return dkl_z.sum()
 
-    def dkl_c(self, qc_z: dist.Categorical):
+    def dkl_c(self, qc_z: dist.Categorical) -> torch.Tensor:
         if self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
@@ -250,7 +250,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_pi(self):
+    def dkl_pi(self) -> torch.Tensor:
         if self.dirichlet_prior:
             alpha, _ = self.alpha_and_beta()
             q = dist.Dirichlet(alpha)
@@ -259,7 +259,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_v(self):
+    def dkl_v(self) -> torch.Tensor:
         if self.dirichlet_process:
             q = dist.Beta(*self.alpha_and_beta())
             p = dist.Beta(1, 1)
