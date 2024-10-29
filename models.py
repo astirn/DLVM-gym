@@ -125,7 +125,7 @@ class VampPrior(lightning.LightningModule):
 
         self.learning_rate = learning_rate
 
-    def alpha_and_beta(self):
+    def alpha_and_beta(self) -> (torch.Tensor, torch.Tensor):
         alpha = self.alpha_uc.exp()
         if self.dirichlet_process_variational_family:
             beta = self.beta_uc.exp()
@@ -134,7 +134,15 @@ class VampPrior(lightning.LightningModule):
 
         return alpha, beta
 
-    def n_and_V(self):
+    def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
+        alpha, beta = self.alpha_and_beta()
+        log_v = (torch.digamma(alpha) - torch.digamma(alpha + beta))[:-1]
+        log_v = torch.concat([log_v, torch.as_tensor([0]).to(log_v.device)])
+        log_vm1 = (torch.digamma(beta) - torch.digamma(alpha + beta))[:-1]
+        log_vm1 = torch.concat([log_vm1, torch.as_tensor([-torch.inf]).to(log_vm1.device)])
+        return log_v, log_vm1
+
+    def n_and_V(self) -> (torch.Tensor, torch.Tensor):
         n = self.n_uc.exp() + self.dim_z
         L = self.L_uc.tril(-1) + self.L_uc.diagonal(dim1=-2, dim2=-1).exp().diag_embed()
         V = L @ L.mT
@@ -142,7 +150,7 @@ class VampPrior(lightning.LightningModule):
             V = V / n[:, None, None]
         return n, V
 
-    def pc(self):
+    def pc(self) -> dist.Categorical:
         if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
             alpha, _ = self.alpha_and_beta()
             probs = alpha / alpha.sum()
@@ -203,14 +211,6 @@ class VampPrior(lightning.LightningModule):
             return dist.MultivariateNormal(loc=qz_u.loc, precision_matrix=self.n_and_V()[1]).log_prob(z)
         else:
             return qz_u.log_prob(z)
-
-    def log_v_and_log_vm1(self) -> (torch.Tensor, torch.Tensor):
-        alpha, beta = self.alpha_and_beta()
-        log_v = (torch.digamma(alpha) - torch.digamma(alpha + beta))[:-1]
-        log_v = torch.concat([log_v, torch.as_tensor([0]).to(log_v.device)])
-        log_vm1 = (torch.digamma(beta) - torch.digamma(alpha + beta))[:-1]
-        log_vm1 = torch.concat([log_vm1, torch.as_tensor([-torch.inf]).to(log_vm1.device)])
-        return log_v, log_vm1
 
     def qc_z(self, log_pz_c: torch.Tensor) -> dist.Categorical:
         log_probs = log_pz_c
