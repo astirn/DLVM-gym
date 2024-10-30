@@ -233,7 +233,7 @@ class VampPrior(lightning.LightningModule):
             dkl_z -= torch.logsumexp(log_pz_c - torch.log(self.k), dim=-1)
         return dkl_z.sum()
 
-    def dkl_c(self, qc_z: dist.Categorical) -> torch.Tensor:
+    def dkl_c(self, qc_z: dist.Categorical) -> torch.Tensor | float:
         if self.categorical_prior:
             pc = dist.Categorical(probs=torch.ones(self.k, device=self.k.device) / self.k)
             return dist.kl_divergence(qc_z, pc).sum()
@@ -250,7 +250,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_pi(self) -> torch.Tensor:
+    def dkl_pi(self) -> torch.Tensor | float:
         if self.dirichlet_prior:
             alpha, _ = self.alpha_and_beta()
             q = dist.Dirichlet(alpha)
@@ -259,7 +259,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_v(self) -> torch.Tensor:
+    def dkl_v(self) -> torch.Tensor | float:
         if self.dirichlet_process:
             q = dist.Beta(*self.alpha_and_beta())
             p = dist.Beta(1, 1)
@@ -267,7 +267,7 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, pz_c, qc_z, z):
+    def dkl_Lambda(self, qz_u: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor | float:
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
 
@@ -309,7 +309,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_u, qc_z, z)  # zero unless Wishart prior
+            - self.dkl_Lambda(qz_u, z)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
