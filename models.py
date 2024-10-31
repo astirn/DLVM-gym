@@ -267,19 +267,21 @@ class VampPrior(lightning.LightningModule):
         else:
             return 0
 
-    def dkl_Lambda(self, qz_u: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor | float:
+    def dkl_Lambda(self, qz_u: dist.MultivariateNormal, qz_x: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor | float:
         if self.wishart_prior:
             n_q, V_q = self.n_and_V()
 
             with torch.no_grad():
-                residuals = z.unsqueeze(1) - pz_c.mean.unsqueeze(0)
+                residuals = z.unsqueeze(1) - qz_u.mean.unsqueeze(0)
                 w = F.softmax(residuals.norm(p=2, dim=-1), dim=-1)
                 covariance_j = residuals.unsqueeze(-1) @ residuals.unsqueeze(-2)
+                # covariance_j = covariance_j + qz_x.covariance_matrix.unsqueeze(1)
                 covariance_j = (w[:, : , None, None] * covariance_j).sum(dim=0)
                 covariance_j = covariance_j / w.sum(dim=0)[:, None, None]
+                covariance_j = covariance_j + qz_x.covariance_matrix.mean(dim=0)
 
-            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
-            V_p_inv = n_p * (covariance_j + pz_c.covariance_matrix)
+                n_p = torch.as_tensor(self.dim_z).to(n_q.device)
+                V_p_inv = n_p * covariance_j
 
             V_p_inv_V_q = V_p_inv @ V_q
             dkl_Lambda = (
@@ -309,7 +311,7 @@ class VampPrior(lightning.LightningModule):
         elbo_globals = (
             - self.dkl_pi()  # zero unless Dirichlet prior
             - self.dkl_v()  # zero unless Dirichlet process
-            - self.dkl_Lambda(qz_u, z)  # zero unless Wishart prior
+            - self.dkl_Lambda(qz_u, qz_x, z)  # zero unless Wishart prior
         ) / self.num_data
         elbo = elbo_locals + elbo_globals
 
