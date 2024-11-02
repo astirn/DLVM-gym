@@ -8,7 +8,7 @@ python experiments_toy.py --seed $SEED --dataset "anisotropic_gmm"
 python experiments_toy.py --seed $SEED --dataset "moons"
 
 # clustering experiments
-python experiments_clustering.py --seed $SEED --dataset "FashionMNIST"
+python experiments_clustering.py --seed $SEED --dataset "MNIST" --num_trials 5
 
 # scRNA-seq experiments
 python experiments_scRNA.py --seed $SEED --dataset "cortex"
