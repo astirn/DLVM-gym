@@ -1,3 +1,4 @@
+import contextlib
 import lightning
 import torch
 import torch.distributions as dist
@@ -75,7 +76,7 @@ class VampPrior(lightning.LightningModule):
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
             dirichlet_process_variational_family: bool = False,
-            wishart_prior: bool = False,
+            wishart_prior: str = None,
             **kwargs
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
@@ -113,11 +114,11 @@ class VampPrior(lightning.LightningModule):
         self.beta_uc = nn.Parameter(beta.log(), requires_grad=self.dirichlet_process)
 
         # variational parameters for cluster precisions
-        self.n_uc = nn.Parameter(torch.zeros(self.k), requires_grad=self.wishart_prior)
+        self.n_uc = nn.Parameter(torch.zeros(self.k), requires_grad=self.wishart_prior is not None)
         L = torch.eye(self.dim_z)[None].repeat(self.k, 1, 1)
         self.L_uc = nn.Parameter(
             L.tril(-1) + L.diagonal(dim1=-2, dim2=-1).log().diag_embed(),
-            requires_grad=self.decoupled_variance or self.wishart_prior,
+            requires_grad=self.decoupled_variance or self.wishart_prior is not None,
         )
 
         self.clustering_metrics = ClusteringMetrics(k=self.k)
@@ -268,14 +269,13 @@ class VampPrior(lightning.LightningModule):
             return 0
 
     def dkl_Lambda(self, qz_u: dist.MultivariateNormal, qz_x: dist.MultivariateNormal, z: torch.Tensor) -> torch.Tensor | float:
-        if self.wishart_prior:
+        if self.wishart_prior in {'Ia', 'Ib'}:
             n_q, V_q = self.n_and_V()
 
-            with torch.no_grad():
+            with torch.no_grad() if 'a' in self.wishart_prior else contextlib.nullcontext():
                 residuals = z.unsqueeze(1) - qz_u.mean.unsqueeze(0)
                 w = F.softmax(residuals.norm(p=2, dim=-1), dim=-1)
                 covariance_j = residuals.unsqueeze(-1) @ residuals.unsqueeze(-2)
-                # covariance_j = covariance_j + qz_x.covariance_matrix.unsqueeze(1)
                 covariance_j = (w[:, : , None, None] * covariance_j).sum(dim=0)
                 covariance_j = covariance_j / w.sum(dim=0)[:, None, None]
                 covariance_j = covariance_j + qz_x.covariance_matrix.mean(dim=0)
@@ -292,6 +292,44 @@ class VampPrior(lightning.LightningModule):
                     + (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z)
             ) / 2
             return dkl_Lambda.sum()
+
+        elif self.wishart_prior in {'IIa', 'IIb'}:
+            n_q, V_q = self.n_and_V()
+
+            if self.dirichlet_prior or (self.dirichlet_process and not self.dirichlet_process_variational_family):
+                cluster_probs = dist.Dirichlet(self.alpha_and_beta()[0]).rsample()
+            elif self.dirichlet_process:
+                v = dist.Beta(*self.alpha_and_beta()).rsample()[:-1]
+                one = torch.ones_like(v)[:1]
+                v = torch.concat([v, one])
+                one_minus_v = 1 - v
+                cluster_probs = v * torch.concat([one, torch.cumprod(one_minus_v, dim=0)[:-1]])
+            else:
+                cluster_probs = 1 / self.k[None]
+
+            pi = cluster_probs ** (1 / self.dim_z)
+            with torch.no_grad() if 'a' in self.wishart_prior else contextlib.nullcontext():
+                covariance = torch.cov(z.T)
+            covariance_j = pi[:, None, None] * covariance[None]
+            with torch.no_grad() if 'a' in self.wishart_prior else contextlib.nullcontext():
+                covariance_j = covariance_j + qz_x.covariance_matrix.mean(dim=0)
+
+            n_p = torch.as_tensor(self.dim_z).to(n_q.device)
+            V_p_inv = n_p * covariance_j
+
+            V_p_inv_V_q = V_p_inv @ V_q
+            dkl_Lambda = (
+                    - n_p * torch.slogdet(V_p_inv_V_q).logabsdet
+                    + n_q * (torch.einsum('bii->b', V_p_inv_V_q) - self.dim_z)
+                    + 2 * torch.mvlgamma(n_p / 2, self.dim_z)
+                    - 2 * torch.mvlgamma(n_q / 2, self.dim_z)
+                    + (n_q - n_p) * multivariate_digamma(n_q / 2, self.dim_z)
+            ) / 2
+            return dkl_Lambda.sum()
+
+        elif self.wishart_prior is not None:
+            raise NotImplementedError
+
         else:
             return 0
 
