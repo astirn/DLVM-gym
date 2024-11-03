@@ -76,7 +76,7 @@ class VampPrior(lightning.LightningModule):
             dirichlet_prior: bool = False,
             dirichlet_process: bool = False,
             dirichlet_process_variational_family: bool = False,
-            wishart_prior: str = None,
+            wishart_prior: str = False,
             **kwargs
     ):
         assert sum([categorical_prior, dirichlet_prior, dirichlet_process]) <= 1
@@ -327,7 +327,7 @@ class VampPrior(lightning.LightningModule):
             ) / 2
             return dkl_Lambda.sum()
 
-        elif self.wishart_prior is not None:
+        elif self.wishart_prior:
             raise NotImplementedError
 
         else:
