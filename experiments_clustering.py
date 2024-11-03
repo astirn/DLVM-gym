@@ -16,6 +16,7 @@ from torchvision.transforms import ToTensor
 from utils import get_trainer, seed_worker
 from models import VampPrior
 
+BATCH_SIZE = 1024
 DIM_Z = 30
 LEARNING_RATE = 5e-4
 PATIENCE = 10
@@ -95,12 +96,12 @@ def get_dataloaders(ds_train: Dataset, ds_valid: Dataset, batch_size: int, seed:
     return DataLoader(ds_train, shuffle=True, **dl_kwargs), DataLoader(ds_valid, shuffle=False, **dl_kwargs)
 
 
-def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+def fit_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
     ds_train, ds_valid = load_dataset(dataset)
-    dl_train, dl_valid = get_dataloaders(ds_train, ds_valid, batch_size, seed)
+    dl_train, dl_valid = get_dataloaders(ds_train, ds_valid, BATCH_SIZE, seed)
 
     data_dim = np.prod(ds_train[0][0].shape[1:])
     model = VampPrior(
@@ -127,11 +128,11 @@ def fit_model(batch_size: int, model_config: dict, dataset: str, checkpoint_dir:
     torch.cuda.empty_cache()
 
 
-def test_model(batch_size, model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
+def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int | None):
     if seed is not None:
         torch.manual_seed(seed)
 
-    _, ds_test = get_dataloaders(*load_dataset(dataset), batch_size, seed)
+    _, ds_test = get_dataloaders(*load_dataset(dataset), BATCH_SIZE, seed)
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
@@ -161,7 +162,6 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--batch_size', type=int, default=1000)
     parser.add_argument('--dataset', type=str, default='MNIST')
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
@@ -180,8 +180,8 @@ if __name__ == '__main__':
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 Path(f'{checkpoint_path}/DONE').unlink(missing_ok=True)
-                fit_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
-            trial_results = test_model(args.batch_size, config, args.dataset, checkpoint_path, trial_seed)
+                fit_model(config, args.dataset, checkpoint_path, trial_seed)
+            trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
 
     results_dir = f'results/clustering/{args.dataset}/{args.seed}'
