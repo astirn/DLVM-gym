@@ -524,10 +524,10 @@ if __name__ == '__main__':
     sc_results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
-        results_dir = f'results/scRNA/{args.dataset}/{args.seed}/trial_{trial}'
+        results_dir = f'results/scRNA/{args.seed}/{args.dataset}/trial_{trial}'
         os.makedirs(results_dir, exist_ok=True)
 
-        scvi_dir = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/scVI'
+        scvi_dir = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/scVI'
         os.makedirs(scvi_dir, exist_ok=True)
         if not os.path.exists(f'{scvi_dir}/DONE') or args.replace_results:
             fit_scvi(
@@ -550,7 +550,7 @@ if __name__ == '__main__':
         )
 
         for config in TEST_CASES:
-            checkpoint_path = f'experiments/scRNA/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
+            checkpoint_path = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 fit_model(
@@ -581,5 +581,5 @@ if __name__ == '__main__':
 
         sc_results.append(integration_performance(data, args.dataset))
 
-    results_dir = f'results/scRNA/{args.dataset}/{args.seed}'
+    results_dir = f'results/scRNA/{args.seed}/{args.dataset}'
     build_tables(sc_results, results_dir)
