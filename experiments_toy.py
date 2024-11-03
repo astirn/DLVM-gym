@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    experiment_dir = f'experiments/toy/{args.dataset}/{args.seed}'
+    experiment_dir = f'experiments/toy/{args.seed}/{args.dataset}'
     os.makedirs(experiment_dir, exist_ok=True)
 
     toy_data = f'{experiment_dir}/toy_data.pt'
@@ -222,11 +222,11 @@ if __name__ == '__main__':
         )
     toy_data = torch.load(toy_data)
 
-    results_dir = f'results/toy/{args.dataset}/{args.seed}'
+    results_dir = f'results/toy/{args.seed}/{args.dataset}'
     os.makedirs(results_dir, exist_ok=True)
 
     for config in TEST_CASES:
-        config_dir = f'experiments/toy/{args.dataset}/{args.seed}/{str(config)}'
+        config_dir = f'experiments/toy/{args.seed}/{args.dataset}/{str(config)}'
         os.makedirs(config_dir, exist_ok=True)
 
         if not os.path.exists(f'{config_dir}/DONE') or args.replace_results:
