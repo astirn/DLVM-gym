@@ -520,7 +520,8 @@ if __name__ == '__main__':
 
     data = load_dataset(args.dataset)
 
-    results = []
+    model_results = []
+    sc_results = []
     for trial in range(1, args.num_trials + 1):
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         results_dir = f'results/scRNA/{args.dataset}/{args.seed}/trial_{trial}'
@@ -537,8 +538,10 @@ if __name__ == '__main__':
                 scvi_dir,
                 trial_seed
             )
+        embeddings = np.load(f'{scvi_dir}/cell_embeddings.npy')
+        data.obsm['scVI'] = embeddings
         plot_mde(
-            np.load(f'{scvi_dir}/cell_embeddings.npy'),
+            embeddings,
             None,
             data,
             results_dir,
@@ -560,19 +563,23 @@ if __name__ == '__main__':
                     trial_seed,
                     scvi_dir,
                 )
+            embeddings, cluster_probs = test_model(
+                args.batch_size,
+                data,
+                checkpoint_path,
+                trial_seed,
+            )
+            data.obsm[str(config)] = embeddings
             plot_mde(
-                *test_model(
-                    args.batch_size,
-                    data,
-                    checkpoint_path,
-                    trial_seed,
-                ),
+                embeddings,
+                cluster_probs,
                 data,
                 results_dir,
                 f'{str(config)}.pdf',
                 trial_seed
             )
 
-    # results_dir = f'results/scRNA/{args.dataset}/{args.seed}'
-    # os.makedirs(results_dir, exist_ok=True)
-    # build_table(results, results_dir)
+        sc_results.append(integration_performance(data, args.dataset))
+
+    results_dir = f'results/scRNA/{args.dataset}/{args.seed}'
+    build_tables(sc_results, results_dir)
