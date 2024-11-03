@@ -17,10 +17,14 @@ import zlib
 from constants import COLOR_PALETTE, TEST_CASES
 from cytoolz import concat, merge_with
 from cytoolz.curried import curry
+from dataclasses import dataclass
 from models import SingleCellVampPrior
 from torch.utils.data import DataLoader, TensorDataset
 from utils import get_trainer, seed_worker
 from pathlib import Path
+from scib_metrics.benchmark import Benchmarker
+from typing import Any, Dict, Union
+from utils import process_results
 
 
 DATASET_CONFIG = {
@@ -423,6 +427,80 @@ def plot_mde(
 
     plt.tight_layout()
     fig.savefig(f'{fig_path}/{fig_name}', dpi=200)
+
+
+@dataclass(frozen=True)
+class NoBatchCorrection:
+    """
+    A class to skip batch correction metrics that won't work if only a single batch exists
+    """
+    silhouette_batch: Union[bool, Dict[str, Any]] = False
+    ilisi_knn: Union[bool, Dict[str, Any]] = False
+    kbet_per_label: Union[bool, Dict[str, Any]] = False
+    graph_connectivity: Union[bool, Dict[str, Any]] = False
+    pcr_comparison: Union[bool, Dict[str, Any]] = True
+
+
+def config_to_index(configuration: dict):
+    if configuration.get('dirichlet_prior'):
+        cluster_proportions = 'Dirichlet prior'
+    elif configuration.get('dirichlet_process'):
+        cluster_proportions = 'DP prior'
+    else:
+        cluster_proportions = '--'
+
+    if configuration.get('decoupled_variance'):
+        cluster_widths = 'Decoupled'
+    elif configuration.get('wishart_prior'):
+        cluster_widths = 'Wishart prior ' + configuration.get('wishart_prior')
+    else:
+        cluster_widths = '--'
+
+    return {
+        'Cluster Proportions': cluster_proportions,
+        'Cluster Widths': cluster_widths,
+    }
+
+
+def table_index(df: pd.DataFrame, dataset_name: str) -> pd.MultiIndex:
+    index = [
+        {
+            'Dataset': dataset_name,
+            'Embedding Prior': '$\\N(0,I)$' if i == 'scVI' else "VP",
+            **(config_to_index({}) if i == 'scVI' else config_to_index(eval(i)))
+        }
+        for i in df.index.values
+    ]
+    return pd.MultiIndex.from_frame(pd.DataFrame(index))
+
+
+def integration_performance(dataset: anndata.AnnData, dataset_name: str) -> pd.DataFrame:
+    single_batch = dataset.obs['batch'].nunique() == 1
+
+    bm = Benchmarker(
+        dataset,
+        batch_key='batch',
+        label_key='cell_type',
+        embedding_obsm_keys=['scVI'] + [str(t) for t in TEST_CASES],
+        batch_correction_metrics=NoBatchCorrection() if single_batch else None,
+        n_jobs=-1,
+    )
+    bm.benchmark()
+
+    df = bm.get_results(min_max_scale=False).copy()
+    df.columns = pd.MultiIndex.from_arrays([df.loc['Metric Type'], df.columns], names=[None, None])
+    df = df.loc[~df.index.isin(['Metric Type'])].astype(float)
+    if single_batch:
+        df = df[[col for col in df.columns if 'Bio conservation' in col]]
+    df.index = table_index(df, dataset_name)
+
+    return df
+
+
+def build_tables(integration_results: list[pd.DataFrame], save_path: str):
+    integration_table = pd.concat(integration_results)
+    integration_table = process_results(integration_table)
+    integration_table.to_pickle(f'{save_path}/integration_results.pkl')
 
 
 if __name__ == '__main__':

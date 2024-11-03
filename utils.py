@@ -2,7 +2,11 @@ import numpy
 import lightning
 import lightning.pytorch.callbacks as callbacks
 import random
+
+import pandas as pd
 import torch
+
+from scipy.stats import ks_2samp
 
 
 def get_trainer(
@@ -55,3 +59,29 @@ def seed_worker(worker_id: int):
     worker_seed = torch.initial_seed() % 2 ** 32
     numpy.random.seed(worker_seed)
     random.seed(worker_seed)
+
+
+def process_results(
+        df: pd.DataFrame,
+        threshold: float = 0.5,
+        maximize: bool = True,
+        pm_std: bool = False,
+        no_test_cols: list = None
+) -> pd.DataFrame:
+    mean = df.groupby(level=df.index.names, sort=False).mean()
+    std = df.groupby(level=df.index.names, sort=False).std()
+    df.sort_index(inplace=True)
+    for col in mean.columns:
+        best = mean[col].idxmax() if maximize else mean[col].idxmin()
+        for i in mean.index:
+            if pm_std and mean.loc[i, col] > 1:
+                mean.loc[i, col] = '{:.3g} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
+            elif pm_std:
+                mean.loc[i, col] = '{:.3f} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
+            else:
+                mean.loc[i, col] = '{:.4f}'.format(mean.loc[i, col])
+            p = ks_2samp(df.loc[best, col], df.loc[i, col]).pvalue if i != best else None
+            if (i == best or p >= threshold) and (no_test_cols is None or col not in no_test_cols):
+                mean.loc[i, col] = '\\textbf{' + mean.loc[i, col] + '}'
+
+    return mean
