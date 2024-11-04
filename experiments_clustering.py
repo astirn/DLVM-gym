@@ -71,7 +71,7 @@ def load_dataset(dataset: str) -> (Dataset, Dataset):
 def collate(batch):
     batch = list(map(lambda b: {'x': b[0], 'c': torch.LongTensor([b[1]])}, batch))
     batch = merge_with(torch.vstack, batch)
-    batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2
+    batch['x'] = (torch.flatten(batch['x'], start_dim=1) - 0.5) * 2.0
     batch['c'] = batch['c'].squeeze()
     return batch
 
