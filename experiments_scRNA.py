@@ -86,7 +86,7 @@ class Encoder(nn.Module):
         self.log_sigma = nn.Linear(n_hidden, dim_out)
 
     def forward(self, batch: dict[str, torch.Tensor]) -> dist.MultivariateNormal:
-        xs = torch.concat([batch['x'].log1p(), batch['s']], dim=1)
+        xs = torch.concat([batch['x'], batch['s']], dim=1)
         out = self.net(xs)
         mu = self.mu(out)
         sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
@@ -187,7 +187,7 @@ def load_dataset(dataset: str) -> anndata.AnnData:
 def collate(batch, num_batches: int):
     batch = list(map(lambda b: {'x': b[0], 's': b[1], 'c': b[2]}, batch))
     batch = merge_with(torch.vstack, batch)
-    batch['x'] = batch['x'].float()
+    batch['x'] = batch['x'].float().log1p()
     batch['s'] = F.one_hot(batch['s'], num_classes=num_batches).squeeze(1).float()
     batch['c'] = batch['c'].squeeze()
     return batch
