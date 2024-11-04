@@ -16,3 +16,11 @@ python experiments_scRNA.py --seed $SEED --dataset "lung atlas"
 python experiments_scRNA.py --seed $SEED --dataset "pbmc"
 python experiments_scRNA.py --seed $SEED --dataset "retina"
 python experiments_scRNA.py --seed $SEED --dataset "split-seq"
+
+# merge scRNA-seq tables
+python merge_tables.py --output "results/scRNA/${SEED}/integration_results.tex" --tables \
+    "results/scRNA/${SEED}/cortex/integration_results.pkl" \
+    "results/scRNA/${SEED}/lung atlas/integration_results.pkl" \
+    "results/scRNA/${SEED}/pbmc/integration_results.pkl" \
+    "results/scRNA/${SEED}/retina/integration_results.pkl" \
+    "results/scRNA/${SEED}/split-seq/integration_results.pkl"
