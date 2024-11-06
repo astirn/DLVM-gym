@@ -284,10 +284,10 @@ class VampPrior(lightning.LightningModule):
                 cluster_probs = 1 / self.k[None]
 
             pi = cluster_probs ** (1 / self.dim_z)
-            with torch.no_grad() if 'a' in self.wishart_prior else contextlib.nullcontext():
+            with torch.no_grad():
                 covariance = torch.cov(z.T)
             covariance_j = pi[:, None, None] * covariance[None]
-            with torch.no_grad() if 'a' in self.wishart_prior else contextlib.nullcontext():
+            with torch.no_grad():
                 covariance_j = covariance_j + qz_x.covariance_matrix.mean(dim=0)
 
             n_p = torch.as_tensor(self.dim_z).to(n_q.device)
