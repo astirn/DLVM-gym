@@ -408,5 +408,5 @@ class SingleCellVampPrior(VampPrior):
     def u_constraint(self, u_uc: torch.Tensor) -> dict[str, torch.Tensor]:
         return dict(
             x=F.softplus(u_uc[:, :self.hparams.num_genes]),
-            s=F.softmax(u_uc[:, self.hparams.num_genes:])
+            s=F.softmax(u_uc[:, self.hparams.num_genes:], dim=-1)
         )
