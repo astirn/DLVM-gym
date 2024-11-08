@@ -452,7 +452,7 @@ def config_to_index(configuration: dict):
     if configuration.get('decoupled_variance'):
         cluster_widths = 'Decoupled'
     elif configuration.get('wishart_prior'):
-        cluster_widths = 'Wishart prior ' + configuration.get('wishart_prior')
+        cluster_widths = 'Wishart prior'
     else:
         cluster_widths = '--'
 
