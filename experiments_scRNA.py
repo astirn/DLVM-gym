@@ -323,7 +323,7 @@ def fit_model(
     )
     u_initial = next(iter(dl_train))
     u_initial = torch.concat([
-        u_initial['x'][:TRUNCATION_LEVEL].log1p(),
+        softplus_inverse(u_initial['x'][:TRUNCATION_LEVEL]),
         u_initial['s'][:TRUNCATION_LEVEL]
     ], dim=1)
     model = SingleCellVampPrior(
