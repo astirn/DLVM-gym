@@ -20,7 +20,7 @@ from cytoolz.curried import curry
 from dataclasses import dataclass
 from models import SingleCellVampPrior
 from torch.utils.data import DataLoader, TensorDataset
-from utils import get_trainer, seed_worker
+from utils import get_trainer, seed_worker, softplus_inverse
 from pathlib import Path
 from scib_metrics.benchmark import Benchmarker
 from typing import Any, Dict, Union
