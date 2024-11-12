@@ -1,5 +1,6 @@
 import argparse
 import anndata
+import gc
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -346,31 +347,15 @@ def fit_model(
     )
     trainer.fit(model, dl_train, dl_valid)
 
+    predictions = trainer.predict(model, get_dataloaders(batch_size, dataset, seed))
+    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
+
+    np.save(f'{checkpoint_dir}/cell_embeddings.npy', predictions['embeddings'])
+    np.save(f'{checkpoint_dir}/cluster_probabilities.npy', predictions['cluster_probabilities'])
+
     Path(f'{checkpoint_dir}/DONE').touch()
 
     torch.cuda.empty_cache()
-
-
-def test_model(
-        batch_size: int,
-        dataset: anndata.AnnData,
-        checkpoint_dir: str,
-        seed: int | None,
-) -> (np.ndarray, np.ndarray):
-    if seed is not None:
-        torch.manual_seed(seed)
-
-    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
-
-    predictions = trainer.predict(
-        SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/best_val_elbo.ckpt"),
-        get_dataloaders(batch_size, dataset, seed)
-    )
-    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
-
-    torch.cuda.empty_cache()
-
-    return predictions.values()
 
 
 def plot_mde(
@@ -518,11 +503,10 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    data = load_dataset(args.dataset)
-
     model_results = []
     sc_results = []
     for trial in range(1, args.num_trials + 1):
+        data = load_dataset(args.dataset)
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
         results_dir = f'results/scRNA/{args.seed}/{args.dataset}/trial_{trial}'
         os.makedirs(results_dir, exist_ok=True)
@@ -538,16 +522,15 @@ if __name__ == '__main__':
                 scvi_dir,
                 trial_seed
             )
-        embeddings = np.load(f'{scvi_dir}/cell_embeddings.npy')
-        data.obsm['scVI'] = embeddings
-        plot_mde(
-            embeddings,
-            None,
-            data,
-            results_dir,
-            'scVI.pdf',
-            trial_seed
-        )
+        data.obsm['scVI'] = np.load(f'{scvi_dir}/cell_embeddings.npy')
+        # plot_mde(
+        #     embeddings,
+        #     None,
+        #     data,
+        #     results_dir,
+        #     'scVI.pdf',
+        #     trial_seed
+        # )
 
         for config in TEST_CASES:
             checkpoint_path = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/{str(config)}'
@@ -563,23 +546,19 @@ if __name__ == '__main__':
                     trial_seed,
                     scvi_dir,
                 )
-            embeddings, cluster_probs = test_model(
-                args.batch_size,
-                data,
-                checkpoint_path,
-                trial_seed,
-            )
-            data.obsm[str(config)] = embeddings
-            plot_mde(
-                embeddings,
-                cluster_probs,
-                data,
-                results_dir,
-                f'{str(config)}.pdf',
-                trial_seed
-            )
+            data.obsm[str(config)] = np.load(f'{checkpoint_path}/cell_embeddings.npy')
+            # plot_mde(
+            #     embeddings,
+            #     cluster_probs,
+            #     data,
+            #     results_dir,
+            #     f'{str(config)}.pdf',
+            #     trial_seed
+            # )
 
         sc_results.append(integration_performance(data, args.dataset))
+        del data
+        gc.collect()
 
     results_dir = f'results/scRNA/{args.seed}/{args.dataset}'
     build_tables(sc_results, results_dir)
