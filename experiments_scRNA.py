@@ -533,6 +533,7 @@ if __name__ == '__main__':
         # )
 
         for config in TEST_CASES:
+            print(f'Dataset {args.dataset}, Trial = {trial} | Config = {config}')
             checkpoint_path = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
