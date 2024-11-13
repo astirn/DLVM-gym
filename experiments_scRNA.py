@@ -66,6 +66,8 @@ DATASET_CONFIG = {
         n_hidden=128,
     )
 }
+BATCH_SIZE = 1024
+LEARNING_RATE = 5e-4
 MAX_EPOCHS = 10_000
 PATIENCE = 10
 TRUNCATION_LEVEL = 100
@@ -195,7 +197,6 @@ def collate(batch, num_batches: int):
 
 
 def get_dataloaders(
-        batch_size: int,
         dataset: anndata.AnnData,
         seed: int | None,
         split_dir: str = None
@@ -209,7 +210,7 @@ def get_dataloaders(
     cell_types = np.unique(dataset.obs['cell_type'], return_inverse=True)[1]
 
     dl_kwargs = {
-        'batch_size': batch_size,
+        'batch_size': BATCH_SIZE,
         'collate_fn': curry(collate, num_batches=len(np.unique(dataset.obs['batch']))),
         'generator': g,
         'num_workers': 4,
@@ -249,10 +250,8 @@ def get_dataloaders(
 
 
 def fit_scvi(
-        batch_size: int,
         dataset: anndata.AnnData,
         dataset_config: dict,
-        learning_rate: float,
         checkpoint_dir: str,
         seed: int | None
 ):
@@ -268,13 +267,13 @@ def fit_scvi(
     )
 
     model.train(
-        batch_size=batch_size,
+        batch_size=BATCH_SIZE,
         check_val_every_n_epoch=1,
         early_stopping=True,
         early_stopping_patience=PATIENCE,
         max_epochs=MAX_EPOCHS,
         plan_kwargs=dict(
-            lr=learning_rate,
+            lr=LEARNING_RATE,
             weight_decay=0.0,
             eps=1e-7,
             lr_patience=MAX_EPOCHS,
@@ -294,10 +293,8 @@ def fit_scvi(
 
 
 def fit_model(
-        batch_size: int,
         dataset: anndata.AnnData,
         dataset_config: dict,
-        learning_rate: float,
         model_config: dict,
         checkpoint_dir: str,
         seed: int | None,
@@ -310,7 +307,7 @@ def fit_model(
     n_cells = dataset.layers['counts'].shape[0]
     n_genes = dataset.layers['counts'].shape[1]
 
-    dl_train, dl_valid = get_dataloaders(batch_size, dataset, seed, split_dir)
+    dl_train, dl_valid = get_dataloaders(dataset, seed, split_dir)
 
     encoder = Encoder(
         dim_in=n_genes + n_batches,
@@ -335,7 +332,7 @@ def fit_model(
         decoder=decoder,
         u_initial=u_initial,
         truncation_level=TRUNCATION_LEVEL,
-        learning_rate=learning_rate,
+        learning_rate=LEARNING_RATE,
         **model_config
     )
 
@@ -347,7 +344,7 @@ def fit_model(
     )
     trainer.fit(model, dl_train, dl_valid)
 
-    predictions = trainer.predict(model, get_dataloaders(batch_size, dataset, seed))
+    predictions = trainer.predict(model, get_dataloaders(dataset, seed))
     predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
 
     np.save(f'{checkpoint_dir}/cell_embeddings.npy', predictions['embeddings'])
@@ -492,9 +489,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--dataset', type=str, default='cortex')
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
     parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--replace_results', action='store_true')
     parser.add_argument('--seed', type=int, default=None)
@@ -538,10 +533,8 @@ if __name__ == '__main__':
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 fit_model(
-                    args.batch_size,
                     data,
                     DATASET_CONFIG[args.dataset],
-                    args.learning_rate,
                     config,
                     checkpoint_path,
                     trial_seed,
