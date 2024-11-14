@@ -509,14 +509,8 @@ if __name__ == '__main__':
         scvi_dir = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/scVI'
         os.makedirs(scvi_dir, exist_ok=True)
         if not os.path.exists(f'{scvi_dir}/DONE') or args.replace_results:
-            fit_scvi(
-                args.batch_size,
-                data,
-                DATASET_CONFIG[args.dataset],
-                args.learning_rate,
-                scvi_dir,
-                trial_seed
-            )
+            fit_scvi(data, DATASET_CONFIG[args.dataset], scvi_dir, trial_seed)
+
         data.obsm['scVI'] = np.load(f'{scvi_dir}/cell_embeddings.npy')
         # plot_mde(
         #     embeddings,
