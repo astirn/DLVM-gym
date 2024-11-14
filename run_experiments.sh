@@ -8,14 +8,14 @@ python experiments_toy.py --seed $SEED --dataset "anisotropic_gmm"
 python experiments_toy.py --seed $SEED --dataset "moons"
 
 # clustering experiments
-python experiments_clustering.py --seed $SEED --dataset "MNIST" --num_trials 5
+python experiments_clustering.py --num_trials 5 --seed $SEED --dataset "MNIST"
 
 # scRNA-seq experiments
-python experiments_scRNA.py --seed $SEED --dataset "cortex"
-python experiments_scRNA.py --seed $SEED --dataset "lung atlas"
-python experiments_scRNA.py --seed $SEED --dataset "pbmc"
-python experiments_scRNA.py --seed $SEED --dataset "retina"
-python experiments_scRNA.py --seed $SEED --dataset "split-seq"
+python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "cortex"
+python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "lung atlas"
+python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "pbmc"
+python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "retina"
+python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "split-seq"
 
 # merge scRNA-seq tables
 for table in "integration_results"; do
