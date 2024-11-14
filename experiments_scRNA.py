@@ -16,11 +16,11 @@ import torch.nn.functional as F
 import zlib
 
 from constants import COLOR_PALETTE, TEST_CASES
-from cytoolz import concat, merge_with
-from cytoolz.curried import curry
+from cytoolz import concat, pipe
+from cytoolz.curried import curry, map, merge_with, update_in
 from dataclasses import dataclass
 from models import SingleCellVampPrior
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import Dataset, DataLoader
 from utils import get_trainer, seed_worker, softplus_inverse
 from pathlib import Path
 from scib_metrics.benchmark import Benchmarker
@@ -181,15 +181,36 @@ def load_dataset(dataset: str) -> anndata.AnnData:
         raise NotImplementedError
     sc.pp.filter_genes(scvi_dataset, min_counts=3)
     sc.pp.filter_cells(scvi_dataset, min_counts=3)
-    scvi_dataset.layers['counts'] = scvi_dataset.X.todense() if sparse.issparse(scvi_dataset.X) else scvi_dataset.X.copy()
+    scvi_dataset.layers['counts'] = sparse.csr_matrix(scvi_dataset.X)
     scvi_dataset.obs['batch'] = scvi_dataset.obs['batch'].astype(int)
 
     return scvi_dataset
 
 
+class scDataset(Dataset):
+    def __init__(self, x: sparse.csr_matrix, s: np.ndarray, c: np.ndarray, indices: np.ndarray = None):
+        super().__init__()
+        self.x = x
+        self.s = s
+        self.c = c
+        self.indices = np.arange(x.shape[0]) if indices is None else indices
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, i):
+        i = self.indices[i]
+        return {'x': self.x[i], 's': self.s[i], 'c': self.c[i]}
+
+
 def collate(batch, num_batches: int):
-    batch = list(map(lambda b: {'x': b[0], 's': b[1], 'c': b[2]}, batch))
-    batch = merge_with(torch.vstack, batch)
+    batch = pipe(
+        batch,
+        map(update_in(keys=['x'], func=lambda x: torch.tensor(x.todense()))),
+        map(update_in(keys=['s'], func=lambda x: torch.LongTensor([int(x)]))),
+        map(update_in(keys=['c'], func=lambda x: torch.LongTensor([int(x)]))),
+        merge_with(torch.vstack),
+    )
     batch['x'] = batch['x'].float().log1p()
     batch['s'] = F.one_hot(batch['s'], num_classes=num_batches).squeeze(1).float()
     batch['c'] = batch['c'].squeeze()
@@ -220,10 +241,10 @@ def get_dataloaders(
     }
 
     if split_dir is None:
-        ds = TensorDataset(
-            torch.tensor(dataset.layers['counts']),
-            torch.LongTensor(dataset.obs['batch'].values),
-            torch.LongTensor(cell_types),
+        ds = scDataset(
+            x=dataset.layers['counts'],
+            s=dataset.obs['batch'].values,
+            c=cell_types,
         )
 
         return DataLoader(ds, drop_last=False, shuffle=False, **dl_kwargs)
@@ -232,15 +253,17 @@ def get_dataloaders(
         i_train = np.load(f'{split_dir}/train_indices.npy')
         i_valid = np.load(f'{split_dir}/valid_indices.npy')
 
-        ds_train = TensorDataset(
-            torch.tensor(dataset.layers['counts'][i_train]),
-            torch.LongTensor(dataset.obs['batch'].values[i_train]),
-            torch.LongTensor(cell_types[i_train]),
+        ds_train = scDataset(
+            x=dataset.layers['counts'],
+            s=dataset.obs['batch'].values,
+            c=cell_types,
+            indices=i_train,
         )
-        ds_valid = TensorDataset(
-            torch.tensor(dataset.layers['counts'][i_valid]),
-            torch.LongTensor(dataset.obs['batch'].values[i_valid]),
-            torch.LongTensor(cell_types[i_valid]),
+        ds_valid = scDataset(
+            x=dataset.layers['counts'],
+            s=dataset.obs['batch'].values,
+            c=cell_types,
+            indices=i_valid,
         )
 
         dl_train = DataLoader(ds_train, drop_last=True, shuffle=True, **dl_kwargs)
@@ -345,7 +368,7 @@ def fit_model(
     trainer.fit(model, dl_train, dl_valid)
 
     predictions = trainer.predict(model, get_dataloaders(dataset, seed))
-    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
+    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy())(predictions)
 
     np.save(f'{checkpoint_dir}/cell_embeddings.npy', predictions['embeddings'])
     np.save(f'{checkpoint_dir}/cluster_probabilities.npy', predictions['cluster_probabilities'])
