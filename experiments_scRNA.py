@@ -234,7 +234,7 @@ def get_dataloaders(
         'batch_size': BATCH_SIZE,
         'collate_fn': curry(collate, num_batches=len(np.unique(dataset.obs['batch']))),
         'generator': g,
-        'num_workers': 4,
+        'num_workers': 2,
         'persistent_workers': True,
         'pin_memory': False,
         'worker_init_fn': seed_worker if seed is not None else None,
