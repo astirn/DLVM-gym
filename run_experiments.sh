@@ -11,10 +11,8 @@ python experiments_toy.py --seed $SEED --dataset "moons"
 python experiments_clustering.py --num_trials 5 --seed $SEED --dataset "MNIST"
 
 # merge clustering tables
-for table in "results"; do
-    python merge_tables.py --output "results/clustering/${SEED}/${table}.tex" --tables \
-        "results/clustering/${SEED}/MNIST/${table}.pkl"
-done
+python merge_tables.py --output "results/clustering/${SEED}/results.tex" --tables \
+    "results/clustering/${SEED}/MNIST/results.pkl"
 
 # scRNA-seq experiments
 python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "cortex"
