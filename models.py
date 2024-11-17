@@ -14,9 +14,10 @@ def multivariate_digamma(a: torch.Tensor, p: int) -> torch.Tensor:
 
 
 class ClusteringMetrics(torchmetrics.Metric):
-    def __init__(self, k):
+    def __init__(self, k: int, min_members: int = 0):
         super().__init__()
         self.k = k
+        self.min_members = min_members
         self.add_state('assignments', default=torch.zeros(self.k))
         self.add_state('accuracy', default=torch.tensor(0.))
         self.add_state('nmi', default=torch.tensor(0.))
@@ -34,7 +35,7 @@ class ClusteringMetrics(torchmetrics.Metric):
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {
-            'clusters': (self.assignments > 0).sum().to(torch.float32),
+            'clusters': (self.assignments > self.min_members).sum().to(torch.float32),
             'acc': self.accuracy / self.num_samples,
             'nmi': self.nmi / self.num_batches,
         }
