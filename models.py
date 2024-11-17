@@ -343,12 +343,13 @@ class VampPrior(lightning.LightningModule):
         self.clustering_metrics.reset()
 
     def test_step(self, batch, batch_idx):
-        elbo = [self.evidence_lower_bound(batch)[0] for _ in range(1_000)]
-        log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(1_000).float().log()
+        m = 1_000
+        elbo = [self.evidence_lower_bound(batch)[0] for _ in range(m)]
+        log_marginal = torch.logsumexp(torch.stack(elbo), dim=0) - torch.tensor(m).float().log()
         log_marginal = log_marginal.mean()
         qz_x = self.encoder(batch)
-        log_likelihood = [self.decoder(qz_x.rsample(), batch) for _ in range(1_000)]
-        posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(1_000).float().log()
+        log_likelihood = [self.decoder(qz_x.rsample(), batch) for _ in range(m)]
+        posterior_predictive = torch.logsumexp(torch.stack(log_likelihood), dim=0) - torch.tensor(m).float().log()
         posterior_predictive = posterior_predictive.mean()
         self.model_metrics.update(log_marginal, posterior_predictive)
 
