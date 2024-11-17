@@ -6,7 +6,7 @@ import random
 import pandas as pd
 import torch
 
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp as stat_test
 
 
 def get_trainer(
@@ -63,7 +63,7 @@ def seed_worker(worker_id: int):
 
 def process_results(
         df: pd.DataFrame,
-        threshold: float = 0.5,
+        threshold: float = 0.05,
         maximize: bool = True,
         pm_std: bool = False,
         no_test_cols: list = None
@@ -80,7 +80,7 @@ def process_results(
                 mean.loc[i, col] = '{:.3f} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
             else:
                 mean.loc[i, col] = '{:.4f}'.format(mean.loc[i, col])
-            p = ks_2samp(df.loc[best, col], df.loc[i, col]).pvalue if i != best else None
+            p = stat_test(df.loc[best, col], df.loc[i, col]).pvalue if i != best else None
             if (i == best or p >= threshold) and (no_test_cols is None or col not in no_test_cols):
                 mean.loc[i, col] = '\\textbf{' + mean.loc[i, col] + '}'
 
