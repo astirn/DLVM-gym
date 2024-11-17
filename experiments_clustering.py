@@ -196,6 +196,6 @@ if __name__ == '__main__':
             trial_results = test_model(config, args.dataset, checkpoint_path, trial_seed)
             results.append({**trial_results, 'trial': trial})
 
-    results_dir = f'results/clustering/{args.dataset}/{args.seed}'
+    results_dir = f'results/clustering/{args.seed}/{args.dataset}/'
     os.makedirs(results_dir, exist_ok=True)
     build_table(results, results_dir)
