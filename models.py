@@ -23,7 +23,7 @@ class ClusteringMetrics(torchmetrics.Metric):
         self.add_state('num_batches', default=torch.tensor(0.))
         self.add_state('num_samples', default=torch.tensor(0.))
 
-    def update(self, x: torch.Tensor, c: torch.Tensor, qc_z: dist.Categorical, **kwargs) -> None:
+    def update(self, c: torch.Tensor, qc_z: dist.Categorical, **kwargs) -> None:
         cluster_assignments = torch.argmax(qc_z.probs, dim=1)
         cluster_labels = c[torch.argmax(qc_z.probs, dim=0)]
         self.assignments += F.one_hot(cluster_assignments, self.k).sum(dim=0)

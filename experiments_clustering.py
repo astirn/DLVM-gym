@@ -8,13 +8,13 @@ import torch.nn as nn
 import torchvision.datasets as datasets
 import zlib
 
-from cytoolz import merge_with
 from constants import TABLE_COLUMNS, TEST_CASES
+from cytoolz import merge_with
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
 from utils import get_trainer, seed_worker
-from models import VampPrior
+from models import ClusteringMetrics, VampPrior
 
 BATCH_SIZE = 1024
 DIM_Z = 30
@@ -132,15 +132,21 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
     if seed is not None:
         torch.manual_seed(seed)
 
-    _, ds_test = get_dataloaders(*load_dataset(dataset), BATCH_SIZE, seed)
+    ds_train, ds_valid = load_dataset(dataset)
+    _, dl_valid = get_dataloaders(ds_train, ds_valid, BATCH_SIZE, seed)
 
     trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
 
     model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_val_elbo.ckpt')
-    model_results = trainer.test(model, ds_test)[0]
+    model_results = trainer.test(model, dl_valid)[0]
 
     model = VampPrior.load_from_checkpoint(f'{checkpoint_dir}/best_nmi.ckpt')
-    clustering_results = trainer.validate(model, ds_test)[0]
+    predictions = trainer.predict(model, dl_valid)
+    predictions = merge_with(torch.vstack, predictions)
+    qc_z = dist.Categorical(probs=predictions['cluster_probabilities'])
+    clustering_results = ClusteringMetrics(TRUNCATION_LEVEL)
+    clustering_results.update(c=ds_valid.targets, qc_z=qc_z)
+    clustering_results = clustering_results.compute()
 
     torch.cuda.empty_cache()
 
