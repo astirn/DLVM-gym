@@ -4,9 +4,9 @@ import lightning.pytorch.callbacks as callbacks
 import random
 
 import pandas as pd
+import scipy.stats as stats
 import torch
 
-from scipy.stats import wilcoxon as stat_test
 
 
 def get_trainer(
@@ -63,16 +63,18 @@ def seed_worker(worker_id: int):
 
 def process_results(
         df: pd.DataFrame,
-        threshold: float = 0.05,
-        maximize: bool = True,
+        alternative: str = 'greater',
+        no_test_cols: list = None,
         pm_std: bool = False,
-        no_test_cols: list = None
+        stat_test: str = 'wilcoxon',
+        threshold: float = 0.05,
 ) -> pd.DataFrame:
     mean = df.groupby(level=df.index.names, sort=False).mean()
     std = df.groupby(level=df.index.names, sort=False).std()
     df.sort_index(inplace=True)
+    stat_test = getattr(stats, stat_test)
     for col in mean.columns:
-        best = mean[col].idxmax() if maximize else mean[col].idxmin()
+        best = mean[col].idxmax()
         for i in mean.index:
             if pm_std and mean.loc[i, col] > 1:
                 mean.loc[i, col] = '{:.3g} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
@@ -81,7 +83,7 @@ def process_results(
             else:
                 mean.loc[i, col] = '{:.4f}'.format(mean.loc[i, col])
             if no_test_cols is None or col not in no_test_cols:
-                p = stat_test(df.loc[best, col], df.loc[i, col], alternative='greater').pvalue if i != best else None
+                p = stat_test(df.loc[best, col], df.loc[i, col], alternative=alternative).pvalue if i != best else None
                 if i == best or p >= threshold:
                     mean.loc[i, col] = '\\textbf{' + mean.loc[i, col] + '}'
 
