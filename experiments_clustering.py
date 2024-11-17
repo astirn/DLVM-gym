@@ -13,7 +13,7 @@ from cytoolz import merge_with, valmap
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
-from utils import get_trainer, seed_worker
+from utils import get_trainer, seed_worker, process_results
 from models import ClusteringMetrics, VampPrior
 
 BATCH_SIZE = 1024
@@ -158,11 +158,16 @@ def build_table(experimental_results: list[dict], save_path: str):
     df = pd.DataFrame(experimental_results)
     df.rename(columns=TABLE_COLUMNS, inplace=True)
     df.fillna(False, inplace=True)
+
     df = df[TABLE_COLUMNS.values()]
     index = list(TABLE_COLUMNS.values())
     index = index[:index.index('log p(x)')]
-    df = df.groupby(index, sort=False).mean().reset_index()
+    df.set_index(index, inplace=True)
+
     df.to_pickle(f'{save_path}/results.pkl')
+
+    table = process_results(df, pm_std=True, no_test_cols=['Clusters'])
+    table.to_pickle(f'{save_path}/table.pkl')
 
 
 if __name__ == '__main__':
@@ -183,7 +188,7 @@ if __name__ == '__main__':
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
 
         for config in TEST_CASES:
-            checkpoint_path = f'experiments/clustering/{args.dataset}/{args.seed}/trial_{trial}/{str(config)}'
+            checkpoint_path = f'experiments/clustering/{args.seed}/{args.dataset}/trial_{trial}/{str(config)}'
             os.makedirs(checkpoint_path, exist_ok=True)
             if not os.path.exists(f'{checkpoint_path}/DONE') or args.replace_results:
                 Path(f'{checkpoint_path}/DONE').unlink(missing_ok=True)
