@@ -9,7 +9,7 @@ import torchvision.datasets as datasets
 import zlib
 
 from constants import TABLE_COLUMNS, TEST_CASES
-from cytoolz import merge_with
+from cytoolz import merge_with, valmap
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
@@ -147,6 +147,7 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
     clustering_results = ClusteringMetrics(TRUNCATION_LEVEL)
     clustering_results.update(c=ds_valid.targets, qc_z=qc_z)
     clustering_results = clustering_results.compute()
+    clustering_results = valmap(float, clustering_results)
 
     torch.cuda.empty_cache()
 
