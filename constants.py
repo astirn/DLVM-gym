@@ -1,13 +1,9 @@
 import seaborn as sns
 
-from cytoolz import interleave, pipe
-from cytoolz.curried import partition
 
-COLOR_PALETTE = pipe(
-    sns.color_palette('tab20c', n_colors=20) + sns.color_palette('tab20b', n_colors=20),
-    partition(4),
-    interleave,
-    list
+COLOR_PALETTE = (
+        sns.color_palette('tab20', n_colors=20)[0::2] +
+        sns.color_palette('tab20', n_colors=20)[1::2]
 )
 
 TABLE_COLUMNS = {
