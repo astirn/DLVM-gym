@@ -16,10 +16,10 @@ import torch.nn.functional as F
 import zlib
 
 from constants import COLOR_PALETTE, TEST_CASES
-from cytoolz import concat, pipe
+from cytoolz import concat, pipe, valmap
 from cytoolz.curried import curry, map, merge_with, update_in
 from dataclasses import dataclass
-from models import SingleCellVampPrior
+from models import ClusteringMetrics, SingleCellVampPrior
 from torch.utils.data import Dataset, DataLoader
 from utils import get_trainer, seed_worker, softplus_inverse
 from pathlib import Path
@@ -378,6 +378,35 @@ def fit_model(
     torch.cuda.empty_cache()
 
 
+def test_model(
+        dataset: anndata.AnnData,
+        checkpoint_dir: str,
+        model_config: dict,
+        seed: int | None,
+) -> (np.ndarray, np.ndarray):
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    dl_test = get_dataloaders(dataset, seed)
+    trainer = get_trainer(checkpoint_metrics=[], checkpoint_dir=None, patience=0)
+    model = SingleCellVampPrior.load_from_checkpoint(f"{checkpoint_dir}/last.ckpt")
+
+    model_results = trainer.test(model, dl_test)[0]
+
+    predictions = trainer.predict(model, dl_test)
+    predictions = merge_with(torch.vstack, predictions)
+    qc_z = dist.Categorical(probs=predictions['cluster_probabilities'])
+    cell_types = np.unique(dataset.obs['cell_type'], return_inverse=True)[1]
+    clustering_results = ClusteringMetrics(k=TRUNCATION_LEVEL, min_members=100)
+    clustering_results.update(c=torch.tensor(cell_types), qc_z=qc_z)
+    clustering_results = clustering_results.compute()
+    clustering_results = valmap(float, clustering_results)
+
+    torch.cuda.empty_cache()
+
+    return {**model_config, **model_results, **clustering_results}
+
+
 def plot_mde(
         cell_embeddings: np.ndarray,
         cluster_probabilities: np.ndarray | None,
@@ -502,7 +531,7 @@ def integration_performance(dataset: anndata.AnnData, dataset_name: str) -> pd.D
     return df
 
 
-def build_tables(integration_results: list[pd.DataFrame], save_path: str):
+def build_tables(model_results: list[dict], integration_results: list[pd.DataFrame], save_path: str):
     integration_table = pd.concat(integration_results)
     integration_table = process_results(integration_table)
     integration_table.to_pickle(f'{save_path}/integration_results.pkl')
@@ -521,7 +550,7 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    model_results = []
+    modeling_results = []
     sc_results = []
     for trial in range(1, args.num_trials + 1):
         data = load_dataset(args.dataset)
@@ -535,14 +564,6 @@ if __name__ == '__main__':
             fit_scvi(data, DATASET_CONFIG[args.dataset], scvi_dir, trial_seed)
 
         data.obsm['scVI'] = np.load(f'{scvi_dir}/cell_embeddings.npy')
-        # plot_mde(
-        #     embeddings,
-        #     None,
-        #     data,
-        #     results_dir,
-        #     'scVI.pdf',
-        #     trial_seed
-        # )
 
         for config in TEST_CASES:
             print(f'Dataset {args.dataset}, Trial = {trial} | Config = {config}')
@@ -557,19 +578,30 @@ if __name__ == '__main__':
                     trial_seed,
                     scvi_dir,
                 )
+            modeling_results.append({**test_model(data, checkpoint_path, config, trial_seed), 'trial': trial})
             data.obsm[str(config)] = np.load(f'{checkpoint_path}/cell_embeddings.npy')
-            # plot_mde(
-            #     embeddings,
-            #     cluster_probs,
-            #     data,
-            #     results_dir,
-            #     f'{str(config)}.pdf',
-            #     trial_seed
-            # )
 
         sc_results.append(integration_performance(data, args.dataset))
         del data
         gc.collect()
 
     results_dir = f'results/scRNA/{args.seed}/{args.dataset}'
-    build_tables(sc_results, results_dir)
+    build_tables(modeling_results, sc_results, results_dir)
+
+    # plot_mde(
+    #     embeddings,
+    #     None,
+    #     data,
+    #     results_dir,
+    #     'scVI.pdf',
+    #     trial_seed
+    # )
+
+    # plot_mde(
+    #     embeddings,
+    #     cluster_probs,
+    #     data,
+    #     results_dir,
+    #     f'{str(config)}.pdf',
+    #     trial_seed
+    # )
