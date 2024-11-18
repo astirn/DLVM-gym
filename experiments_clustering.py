@@ -144,7 +144,10 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
     predictions = trainer.predict(model, dl_valid)
     predictions = merge_with(torch.vstack, predictions)
     qc_z = dist.Categorical(probs=predictions['cluster_probabilities'])
-    clustering_results = ClusteringMetrics(TRUNCATION_LEVEL)
+    clustering_results = ClusteringMetrics(
+        k=TRUNCATION_LEVEL,
+        min_members=len(ds_valid) // TRUNCATION_LEVEL,
+    )
     clustering_results.update(c=ds_valid.targets, qc_z=qc_z)
     clustering_results = clustering_results.compute()
     clustering_results = valmap(float, clustering_results)
@@ -168,6 +171,9 @@ def build_table(experimental_results: list[dict], save_path: str):
     df.to_pickle(f'{save_path}/results.pkl')
 
     table = process_results(df, pm_std=True, min_cols=['Clusters'])
+    if len(table[table.index.get_level_values('DP')].index.get_level_values('DP VF').unique()) < 2:
+        table = table.droplevel('DP VF')
+
     table.to_pickle(f'{save_path}/table.pkl')
 
 

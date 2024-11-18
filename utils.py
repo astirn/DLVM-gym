@@ -63,8 +63,7 @@ def seed_worker(worker_id: int):
 
 def process_results(
         df: pd.DataFrame,
-        alternative: str = 'greater',
-        no_test_cols: list = None,
+        min_cols: list = None,
         pm_std: bool = False,
         stat_test: str = 'wilcoxon',
         threshold: float = 0.05,
@@ -72,9 +71,10 @@ def process_results(
     mean = df.groupby(level=df.index.names, sort=False).mean()
     std = df.groupby(level=df.index.names, sort=False).std()
     df.sort_index(inplace=True)
+    min_cols = min_cols or []
     stat_test = getattr(stats, stat_test)
     for col in mean.columns:
-        best = mean[col].idxmax()
+        best = mean[col].idxmin() if col in min_cols else mean[col].idxmax()
         for i in mean.index:
             if pm_std and mean.loc[i, col] > 1:
                 mean.loc[i, col] = '{:.3g} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
@@ -82,9 +82,13 @@ def process_results(
                 mean.loc[i, col] = '{:.3f} $\\pm$ {:.2f}'.format(mean.loc[i, col], std.loc[i, col])
             else:
                 mean.loc[i, col] = '{:.4f}'.format(mean.loc[i, col])
-            if no_test_cols is None or col not in no_test_cols:
-                p = stat_test(df.loc[best, col], df.loc[i, col], alternative=alternative).pvalue if i != best else None
-                if i == best or p >= threshold:
+
+            if i == best:
+                mean.loc[i, col] = '\\textbf{' + mean.loc[i, col] + '}'
+            else:
+                alternative = 'less' if col in min_cols else 'greater'
+                p = stat_test(df.loc[[best], col], df.loc[[i], col], alternative=alternative).pvalue
+                if p >= threshold:
                     mean.loc[i, col] = '\\textbf{' + mean.loc[i, col] + '}'
 
     return mean
