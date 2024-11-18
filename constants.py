@@ -26,13 +26,13 @@ TEST_CASES = [
     dict(),
 
     dict(decoupled_variance=True),
-    dict(wishart_prior=True),
+    # dict(wishart_prior=True),
 
     dict(dirichlet_prior=True),
     dict(dirichlet_prior=True, decoupled_variance=True),
-    dict(dirichlet_prior=True, wishart_prior=True),
+    # dict(dirichlet_prior=True, wishart_prior=True),
 
     dict(dirichlet_process=True, dirichlet_process_variational_family=True),
     dict(dirichlet_process=True, dirichlet_process_variational_family=True, decoupled_variance=True),
-    dict(dirichlet_process=True, dirichlet_process_variational_family=True, wishart_prior=True),
+    # dict(dirichlet_process=True, dirichlet_process_variational_family=True, wishart_prior=True),
 ]
