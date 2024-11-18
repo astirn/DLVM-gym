@@ -171,7 +171,7 @@ def build_table(experimental_results: list[dict], save_path: str):
     df.to_pickle(f'{save_path}/results.pkl')
 
     table = process_results(df, min_cols=['Clusters'], pm_std=True, stat_test='wilcoxon')
-    if len(table[table.index.get_level_values('DP')].index.get_level_values('DP VF').unique()) < 2:
+    if len(table[table.index.get_level_values('DP Prior')].index.get_level_values('DP VF').unique()) < 2:
         table = table.droplevel('DP VF')
 
     table.to_pickle(f'{save_path}/table.pkl')
