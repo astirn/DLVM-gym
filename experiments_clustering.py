@@ -165,7 +165,7 @@ def build_table(experimental_results: list[dict], save_path: str):
     table_columns = [col for col in TABLE_COLUMNS.values() if col in df.columns]
     df = df[table_columns]
     index = list(table_columns)
-    index = index[:index.index('$log p(x)$')]
+    index = index[:index.index('$\\log p(x)$')]
     df.set_index(index, inplace=True)
 
     df.to_pickle(f'{save_path}/results.pkl')
