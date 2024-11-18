@@ -21,11 +21,10 @@ from cytoolz.curried import curry, map, merge_with, update_in
 from dataclasses import dataclass
 from models import ClusteringMetrics, SingleCellVampPrior
 from torch.utils.data import Dataset, DataLoader
-from utils import get_trainer, seed_worker, softplus_inverse
+from utils import get_trainer, seed_worker, softplus_inverse, merge_results, process_results
 from pathlib import Path
 from scib_metrics.benchmark import Benchmarker
 from typing import Any, Dict, Union
-from utils import process_results
 
 
 DATASET_CONFIG = {

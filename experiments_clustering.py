@@ -1,19 +1,18 @@
 import argparse
 import numpy as np
 import os
-import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 import torchvision.datasets as datasets
 import zlib
 
-from constants import TABLE_COLUMNS, TEST_CASES
+from constants import TEST_CASES
 from cytoolz import merge_with, valmap
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
-from utils import get_trainer, seed_worker, process_results
+from utils import get_trainer, merge_results, process_results, seed_worker
 from models import ClusteringMetrics, VampPrior
 
 BATCH_SIZE = 1024
@@ -158,15 +157,7 @@ def test_model(model_config: dict, dataset: str, checkpoint_dir: str, seed: int 
 
 
 def build_table(experimental_results: list[dict], save_path: str):
-    df = pd.DataFrame(experimental_results)
-    df.rename(columns=TABLE_COLUMNS, inplace=True)
-    df.fillna(False, inplace=True)
-
-    table_columns = [col for col in TABLE_COLUMNS.values() if col in df.columns]
-    df = df[table_columns]
-    index = list(table_columns)
-    index = index[:index.index('$\\log p(x)$')]
-    df.set_index(index, inplace=True)
+    df = merge_results(experimental_results)
 
     df.to_pickle(f'{save_path}/results.pkl')
 

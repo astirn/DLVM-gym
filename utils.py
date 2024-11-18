@@ -1,12 +1,12 @@
-import numpy
 import lightning
 import lightning.pytorch.callbacks as callbacks
-import random
-
+import numpy
 import pandas as pd
+import random
 import scipy.stats as stats
 import torch
 
+from constants import TABLE_COLUMNS
 
 
 def get_trainer(
@@ -60,6 +60,19 @@ def seed_worker(worker_id: int):
     numpy.random.seed(worker_seed)
     random.seed(worker_seed)
 
+
+def merge_results(results: list[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(results)
+    df.rename(columns=TABLE_COLUMNS, inplace=True)
+    df.fillna(False, inplace=True)
+
+    table_columns = [col for col in TABLE_COLUMNS.values() if col in df.columns]
+    df = df[table_columns]
+    index = list(table_columns)
+    index = index[:index.index('$\\log p(x)$')]
+    df.set_index(index, inplace=True)
+
+    return df
 
 def process_results(
         df: pd.DataFrame,
