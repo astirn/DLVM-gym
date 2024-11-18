@@ -2,9 +2,10 @@ import argparse
 import pandas as pd
 
 
-def merge_tables(pickles: list[str], output: str):
+def merge_tables(pickles: list[str], output: str, clines: str = None, sort_columns: bool = False):
     df = pd.concat([pd.read_pickle(p) for p in pickles])
-    df.sort_index(axis=1, inplace=True)
+    if sort_columns:
+        df.sort_index(axis=1, inplace=True)
     df.fillna('N/A', inplace=True)
 
     col_fmt = 'l' * df.index.nlevels
@@ -19,15 +20,17 @@ def merge_tables(pickles: list[str], output: str):
         column_format=col_fmt,
         multicol_align='c|',
         hrules=True,
-        clines="skip-last;data",
+        clines=clines,
         multirow_align='t'
     )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--clines', type=str, default=None)
     parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--sort_columns', action='store_true')
     parser.add_argument('--tables', type=str, nargs='+', required=True)
     args = parser.parse_args()
-    merge_tables(args.tables, args.output)
+    merge_tables(args.tables, args.output, args.clines, args.sort_columns)
 

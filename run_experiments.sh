@@ -11,8 +11,8 @@ python experiments_toy.py --seed $SEED --dataset "moons"
 python experiments_clustering.py --num_trials 5 --seed $SEED --dataset "MNIST"
 
 # merge clustering tables
-python merge_tables.py --output "results/clustering/${SEED}/results.tex" --tables \
-    "results/clustering/${SEED}/MNIST/results.pkl"
+python merge_tables.py --output "results/clustering/${SEED}/clustering_table.tex" --tables \
+    "results/clustering/${SEED}/MNIST/table.pkl"
 
 # scRNA-seq experiments
 python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "cortex"
@@ -23,7 +23,9 @@ python experiments_scRNA.py --num_trials 5 --seed $SEED --dataset "split-seq"
 
  merge scRNA-seq tables
 for table in "integration_results"; do
-    python merge_tables.py --output "results/scRNA/${SEED}/${table}.tex" --tables \
+    python merge_tables.py --clines 'skip-last;data' --sort_columns \
+    --output "results/scRNA/${SEED}/${table}.tex" \
+    --tables \
         "results/scRNA/${SEED}/cortex/${table}.pkl" \
         "results/scRNA/${SEED}/lung atlas/${table}.pkl" \
         "results/scRNA/${SEED}/pbmc/${table}.pkl" \

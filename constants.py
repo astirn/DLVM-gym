@@ -14,8 +14,8 @@ TABLE_COLUMNS = {
     'dirichlet_process': 'DP',
     'dirichlet_process_variational_family': 'DP VF',
 
-    'log_marginal': 'log p(x)',
-    'posterior_predictive': 'log p(x|x)',
+    'log_marginal': '$log p(x)$',
+    'posterior_predictive': '$log p(x|x)$',
 
     'acc': 'Accuracy',
     'nmi': 'NMI',
