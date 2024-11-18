@@ -7,15 +7,15 @@ COLOR_PALETTE = (
 )
 
 TABLE_COLUMNS = {
-    'decoupled_variance': 'Decoupled',
-    'wishart_prior': 'Wishart',
-    'categorical_prior': 'Categorical',
-    'dirichlet_prior': 'Dirichlet',
-    'dirichlet_process': 'DP',
+    'decoupled_variance': 'Decoupled Variance',
+    'wishart_prior': 'Wishart Prior',
+    'categorical_prior': 'Categorical Prior',
+    'dirichlet_prior': 'Dirichlet Prior',
+    'dirichlet_process': 'DP Prior',
     'dirichlet_process_variational_family': 'DP VF',
 
-    'log_marginal': '$log p(x)$',
-    'posterior_predictive': '$log p(x|x)$',
+    'log_marginal': '$\\log p(x)$',
+    'posterior_predictive': '$\\log p(x|x)$',
 
     'acc': 'Accuracy',
     'nmi': 'NMI',
