@@ -13,6 +13,7 @@ COLOR_PALETTE = pipe(
 TABLE_COLUMNS = {
     'decoupled_variance': 'Decoupled',
     'wishart_prior': 'Wishart',
+    'categorical_prior': 'Categorical',
     'dirichlet_prior': 'Dirichlet',
     'dirichlet_process': 'DP',
     'dirichlet_process_variational_family': 'DP VF',

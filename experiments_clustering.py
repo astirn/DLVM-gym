@@ -159,14 +159,15 @@ def build_table(experimental_results: list[dict], save_path: str):
     df.rename(columns=TABLE_COLUMNS, inplace=True)
     df.fillna(False, inplace=True)
 
-    df = df[TABLE_COLUMNS.values()]
-    index = list(TABLE_COLUMNS.values())
+    table_columns = [col for col in TABLE_COLUMNS.values() if col in df.columns]
+    df = df[table_columns]
+    index = list(table_columns)
     index = index[:index.index('log p(x)')]
     df.set_index(index, inplace=True)
 
     df.to_pickle(f'{save_path}/results.pkl')
 
-    table = process_results(df, pm_std=True, no_test_cols=['Clusters'])
+    table = process_results(df, pm_std=True, min_cols=['Clusters'])
     table.to_pickle(f'{save_path}/table.pkl')
 
 
