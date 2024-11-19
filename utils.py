@@ -72,6 +72,9 @@ def merge_results(results: list[dict]) -> pd.DataFrame:
     index = index[:index.index('$\\log p(x)$')]
     df.set_index(index, inplace=True)
 
+    if len(df[df.index.get_level_values('DP Prior')].index.get_level_values('DP VF').unique()) < 2:
+        df = df.droplevel('DP VF')
+
     return df
 
 def process_results(

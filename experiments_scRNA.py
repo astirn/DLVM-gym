@@ -396,7 +396,7 @@ def test_model(
     predictions = merge_with(torch.vstack, predictions)
     qc_z = dist.Categorical(probs=predictions['cluster_probabilities'])
     cell_types = np.unique(dataset.obs['cell_type'], return_inverse=True)[1]
-    clustering_results = ClusteringMetrics(k=TRUNCATION_LEVEL, min_members=100)
+    clustering_results = ClusteringMetrics(k=TRUNCATION_LEVEL)
     clustering_results.update(c=torch.tensor(cell_types), qc_z=qc_z)
     clustering_results = clustering_results.compute()
     clustering_results = valmap(float, clustering_results)
@@ -532,8 +532,16 @@ def integration_performance(dataset: anndata.AnnData, dataset_name: str) -> pd.D
 
 def build_tables(model_results: list[dict], integration_results: list[pd.DataFrame], save_path: str):
     integration_table = pd.concat(integration_results)
-    integration_table = process_results(integration_table)
+    integration_table = process_results(integration_table, stat_test='mannwhitneyu')
     integration_table.to_pickle(f'{save_path}/integration_results.pkl')
+
+    model_results = merge_results(model_results)
+    model_results['Dataset'] = integration_table.index.get_level_values('Dataset').unique()[0]
+    model_results['Embedding Prior'] = 'VP'
+    model_results.set_index(['Dataset', 'Embedding Prior'], append=True, inplace=True)
+    model_results.to_pickle(f'{save_path}/modeling_results.pkl')
+    modeling_table = process_results(model_results, min_cols=['Clusters'], pm_std=True, stat_test='wilcoxon')
+    modeling_table.to_pickle(f'{save_path}/modeling_table.pkl')
 
 
 if __name__ == '__main__':
@@ -581,6 +589,7 @@ if __name__ == '__main__':
             data.obsm[str(config)] = np.load(f'{checkpoint_path}/cell_embeddings.npy')
 
         sc_results.append(integration_performance(data, args.dataset))
+
         del data
         gc.collect()
 
