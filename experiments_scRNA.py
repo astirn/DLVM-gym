@@ -563,8 +563,6 @@ if __name__ == '__main__':
     for trial in range(1, args.num_trials + 1):
         data = load_dataset(args.dataset)
         trial_seed = zlib.crc32(f'{args.seed}{trial}'.encode())
-        results_dir = f'results/scRNA/{args.seed}/{args.dataset}/trial_{trial}'
-        os.makedirs(results_dir, exist_ok=True)
 
         scvi_dir = f'experiments/scRNA/{args.seed}/{args.dataset}/trial_{trial}/scVI'
         os.makedirs(scvi_dir, exist_ok=True)
