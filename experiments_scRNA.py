@@ -531,9 +531,10 @@ def integration_performance(dataset: anndata.AnnData, dataset_name: str) -> pd.D
 
 
 def build_tables(model_results: list[dict], integration_results: list[pd.DataFrame], save_path: str):
-    integration_table = pd.concat(integration_results)
-    integration_table = process_results(integration_table, stat_test='mannwhitneyu')
-    integration_table.to_pickle(f'{save_path}/integration_results.pkl')
+    integration_results = pd.concat(integration_results)
+    integration_results.to_pickle(f'{save_path}/integration_results.pkl')
+    integration_table = process_results(integration_results, stat_test='mannwhitneyu')
+    integration_table.to_pickle(f'{save_path}/integration_table.pkl')
 
     model_results = merge_results(model_results)
     model_results['Dataset'] = integration_table.index.get_level_values('Dataset').unique()[0]
