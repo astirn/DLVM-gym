@@ -121,7 +121,7 @@ class VampPrior(lightning.LightningModule):
             requires_grad=self.decoupled_variance or self.wishart_prior,
         )
 
-        self.clustering_metrics = ClusteringMetrics(k=self.k)
+        self.clustering_metrics = ClusteringMetrics(k=int(self.k))
         self.model_metrics = ModelMetrics()
 
         self.learning_rate = learning_rate
