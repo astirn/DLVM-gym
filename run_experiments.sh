@@ -8,4 +8,4 @@ python experiments_toy.py --seed $SEED --dataset "anisotropic_gmm"
 python experiments_toy.py --seed $SEED --dataset "moons"
 
 # clustering experiments
-python experiments_clustering.py --num_trials $NUM_TRIALS --seed $SEED --dataset "MNIST"
+python experiments_clustering.py --num_trials 5 --seed $SEED --dataset "MNIST"
