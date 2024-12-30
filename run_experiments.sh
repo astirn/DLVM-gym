@@ -9,3 +9,7 @@ python experiments_toy.py --seed $SEED --dataset "moons"
 
 # clustering experiments
 python experiments_clustering.py --num_trials 5 --seed $SEED --dataset "MNIST"
+
+# merge clustering tables
+python merge_tables.py --output "results/clustering/${SEED}/clustering_table.tex" --tables \
+    "results/clustering/${SEED}/MNIST/table.pkl"
