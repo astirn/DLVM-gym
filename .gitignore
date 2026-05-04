@@ -1,5 +1,9 @@
-.idea
+*__pycache__
 *.pdf
+
+.idea
+.vscode
+
 data/
 experiments/
 lightning_logs/
