@@ -36,9 +36,8 @@ class VampPrior(AbstractVampPrior, ABC):
         pass
 
     def log_pz_c(self, z: Tensor) -> Tensor:
-        z = z[:, None]
         pz_c = self.qz(self.u)
-        return pz_c.log_prob(z)
+        return pz_c.log_prob(z[:, None])
 
     def dkl_z(self, qz_x: dist.Distribution, log_pz_c: Tensor) -> Tensor:
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)

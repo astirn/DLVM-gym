@@ -23,7 +23,7 @@ class AbstractVampPrior(torch.nn.Module, ABC):
         self.dim_z = dim_z
         self.num_data = num_data
         self.k = truncation_level
-        self.u_uc = nn.Parameter(u_initial, requires_grad=True)
+        self.u_uc = nn.Parameter(u_initial)
 
     @abstractmethod
     def px(self, z: torch.Tensor) -> Distribution:
