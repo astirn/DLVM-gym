@@ -26,13 +26,13 @@ class AbstractVampPrior(torch.nn.Module, ABC):
         self._u = torch.nn.Parameter(u)
         self._u_constraint = u_constraint
 
-    def px(self, z: Tensor, c: Tensor | None = None) -> dist.Distribution:
-        zc = torch.concat([z, c], dim=1) if c is not None else z
-        return self.decoder(zc)
+    def px(self, z: Tensor, y: Tensor | None = None) -> dist.Distribution:
+        zy = torch.concat([z, y], dim=1) if y is not None else z
+        return self.decoder(zy)
 
-    def qz(self, x: Tensor, c: Tensor | None = None) -> dist.MultivariateNormal:
-        xc = torch.concat([x, c], dim=1) if c is not None else x
-        return self.encoder(xc)
+    def qz(self, x: Tensor, y: Tensor | None = None) -> dist.MultivariateNormal:
+        xy = torch.concat([x, y], dim=1) if y is not None else x
+        return self.encoder(xy)
 
     @property
     def u(self) -> Tensor:

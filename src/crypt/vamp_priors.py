@@ -23,13 +23,13 @@ class VampPrior(AbstractVampPrior):
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.sum()
 
-    def evidence_lower_bound(self, x: Tensor, c: torch.Tensor | None = None) -> Tensor:
-        qz_x = self.qz(x, c)
+    def evidence_lower_bound(self, x: Tensor, y: torch.Tensor | None = None) -> Tensor:
+        qz_x = self.qz(x, y)
         z = qz_x.rsample()
 
         log_pz_c = self.log_pz_c(z)
 
-        local_ll = self.px(z, c).log_prob(x).sum()
+        local_ll = self.px(z, y).log_prob(x).sum()
         local_kl = self.dkl_z(qz_x, log_pz_c)
         elbo = (local_ll - local_kl) / z.shape[0]
 
