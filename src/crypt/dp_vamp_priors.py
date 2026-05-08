@@ -2,7 +2,7 @@ import torch
 import torch.distributions as dist
 from torch import Tensor
 
-from .vamprior import VampPrior
+from .vamppriors import VampPrior, VampPriorUnchained
 
 
 class DirichletProcessVampPrior(VampPrior):
@@ -12,10 +12,6 @@ class DirichletProcessVampPrior(VampPrior):
 
         self.log_alpha_v = torch.nn.Parameter(torch.zeros(self.k))
         self.log_beta_v = torch.nn.Parameter(torch.ones(self.k))
-
-    def log_pz_c(self, z: Tensor) -> Tensor:
-        pz_c = self.qz(self.u)
-        return pz_c.log_prob(z[:, None])
 
     def log_v_and_log_vm1(self) -> tuple[torch.Tensor, torch.Tensor]:
         alpha, beta = torch.exp(self.log_alpha_v), torch.exp(self.log_beta_v)
@@ -95,3 +91,12 @@ class DirichletProcessVampPrior(VampPrior):
         elbo = (local_ll - local_kl) / z.shape[0] - global_kl / self.num_data
 
         return elbo
+
+
+class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def log_pz_c(self, z: Tensor) -> Tensor:
+        return VampPriorUnchained.log_pz_c(self, z)
