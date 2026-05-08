@@ -39,5 +39,9 @@ class AbstractVampPrior(torch.nn.Module, ABC):
         return self._u_constraint(self._u)
 
     @abstractmethod
+    def qc(self, log_pz_c: Tensor) -> dist.Categorical:
+        pass
+
+    @abstractmethod
     def evidence_lower_bound(self, x: Tensor, c: Tensor | None = None) -> Tensor:
         pass

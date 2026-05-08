@@ -12,7 +12,7 @@ class VampPriorUnchained(VampPrior):
 
         qz_x = self.qz(self.u)
         if isinstance(qz_x, dist.MultivariateNormal):
-            L = torch.linalg.cholesky(qz_x.precision_matrix)
+            L = torch.linalg.cholesky(qz_x.covariance_matrix)
         elif isinstance(qz_x, dist.Normal):
             L = qz_x.scale.diag_embed()
         else:
