@@ -1,9 +1,11 @@
-*.pdf
-*__pycache__
-
-.idea
+# Directories
+.venv
 .vscode
+datasets
+logs
 
-data/
-experiments/
-lightning_logs/
+# File extensions
+*.pyc
+
+# Files
+.DS_Store

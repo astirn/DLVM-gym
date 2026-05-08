@@ -1,0 +1,7 @@
+defaults:
+  - model_checkpoint
+  - step_based_progress_bar
+  - _self_
+
+model_checkpoint:
+  dirpath: ${hydra:runtime.output_dir}/checkpoints
