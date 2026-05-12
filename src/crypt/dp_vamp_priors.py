@@ -30,8 +30,12 @@ class DirichletProcessVampPrior(VampPrior):
 
         self.log_gamma = torch.nn.Parameter(torch.zeros(self.k, 2))
 
+    @property
+    def gamma(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.log_gamma.exp()[:, 0], self.log_gamma.exp()[:, 1]
+
     def log_v_and_log_vm1(self) -> tuple[torch.Tensor, torch.Tensor]:
-        gamma_1, gamma_2 = self.log_gamma[:, 0].exp(), self.log_gamma[:, 1].exp()
+        gamma_1, gamma_2 = self.gamma
         log_v = (torch.digamma(gamma_1) - torch.digamma(gamma_1 + gamma_2))[:-1]
         log_v = torch.concat([log_v, torch.as_tensor([0]).to(log_v.device)])
         log_vm1 = (torch.digamma(gamma_2) - torch.digamma(gamma_1 + gamma_2))[:-1]
@@ -81,7 +85,7 @@ class DirichletProcessVampPrior(VampPrior):
             return 0.0
 
     def dkl_v(self, log_vm1: Tensor) -> torch.Tensor:
-        gamma_1, gamma_2 = self.log_gamma[:, 0].exp(), self.log_gamma[:, 1].exp()
+        gamma_1, gamma_2 = self.gamma
         qv = dist.Beta(gamma_1, gamma_2)
         if self.concentration is None:
             alpha, beta = 1 + self.log_alpha_minus_1.exp(), self.log_beta.exp()

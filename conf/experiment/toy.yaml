@@ -2,7 +2,7 @@
 
 defaults:
   - /callbacks@callbacks: default
-  - /crypt@model: dp_vamprior
+  - /crypt@model: dp_vamp_prior_unchained
   - /data@data: gaussian_mixture
   - /hydra@hydra: default
   - /trainer@trainer: step_based

@@ -1,0 +1,3 @@
+_target_: src.crypt.dp_vamp_priors.DirichletProcessVampPriorUnchained
+concentration: 1.0
+concentration_prior_params: null
