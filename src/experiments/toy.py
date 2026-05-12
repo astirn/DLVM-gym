@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import hydra
@@ -29,13 +28,13 @@ class Encoder(nn.Module):
             nn.Tanh(),
         )
         self.mu = nn.Linear(hidden_dim, dim_z)
-        self.sigma_uc = nn.Linear(hidden_dim, dim_z)
+        self.log_sigma = nn.Linear(hidden_dim, dim_z)
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = self.sigma_uc(out).exp()
-        return dist.MultivariateNormal(mu, covariance_matrix=torch.diag_embed(sigma))
+        sigma = self.log_sigma(out).exp()
+        return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
@@ -46,17 +45,17 @@ class Decoder(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, dim_x),
         )
-        self.sigma_uc = nn.Parameter(torch.as_tensor(0.0))
+        self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
 
     def forward(self, z: torch.Tensor) -> dist.Distribution:
-        scale = self.sigma_uc.exp().sqrt()
+        scale = self.log_sigma.exp()
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
 def plot_results(
     datamodule: GaussianMixtureDataModule, model: ModelWrapper, trainer: Trainer
 ):
-    fig_path = os.path.join(HydraConfig.get().runtime.output_dir, "toy_plot.pdf")
+    fig_path = Path(HydraConfig.get().runtime.output_dir) / "toy_plot.pdf"
 
     dataset = datamodule.data["test"]
     if not isinstance(dataset, TensorDataset):

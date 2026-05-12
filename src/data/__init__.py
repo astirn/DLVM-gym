@@ -1,3 +1,3 @@
-from .gaussian_mixture import GaussianMixtureDataModule
+from .gaussian_mixture import AbstractDataModule, GaussianMixtureDataModule
 
-__all__ = ["GaussianMixtureDataModule"]
+__all__ = ["AbstractDataModule", "GaussianMixtureDataModule"]
