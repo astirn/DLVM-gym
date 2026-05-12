@@ -1,0 +1,48 @@
+# @package _global_
+
+defaults:
+  - /callbacks@callbacks: default
+  - /crypt@model: dp_vamprior
+  - /data@data: gaussian_mixture
+  - /hydra@hydra: default
+  - /trainer@trainer: step_based
+  - _self_
+
+dim_data: 2
+dim_z: 1
+hidden_dim: 100
+seed: 0
+truncation_level: 40
+
+model:
+  _recursive_: false
+
+  decoder_params:
+    _target_: src.experiments.toy.Decoder
+    dim_x: ${dim_data}
+    dim_z: ${dim_z}
+    hidden_dim: ${hidden_dim}
+
+  encoder_params:
+    _target_: src.experiments.toy.Encoder
+    dim_x: ${dim_data}
+    dim_z: ${dim_z}
+    hidden_dim: ${hidden_dim}
+
+  num_data: ${data.num_samples.train}
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-3
+  maximize: true
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: ${model.optimizer.lr}
+  total_steps: ${trainer.max_steps}
+
+trainer:
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: "norm"
+  max_steps: 5000
+  val_check_interval: 500

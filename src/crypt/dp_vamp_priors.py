@@ -10,7 +10,7 @@ class DirichletProcessVampPrior(VampPrior):
     def __init__(
         self,
         *,
-        concentration: float | None = 0.1,
+        concentration: float | None = None,
         concentration_prior_params: tuple[float, float] | None = None,
         **kwargs,
     ):
