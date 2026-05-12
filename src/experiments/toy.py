@@ -1,14 +1,23 @@
+import os
+from pathlib import Path
+
 import hydra
 import lightning
+import matplotlib.pyplot as plt
+import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
-from lightning import LightningDataModule, LightningModule, Trainer
+from lightning import Trainer
+from matplotlib.gridspec import GridSpec
 from omegaconf import DictConfig
-from toolz import valmap
+from toolz import merge_with, valmap
+from torch.utils.data import TensorDataset
 
-from src.data.abstract import AbstractDataModule
+from constants import COLOR_PALETTE
+from src.data import GaussianMixtureDataModule
 from src.model_wrapper import ModelWrapper
 
 
@@ -44,16 +53,69 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
-def initial_u_tensor(batch_x: torch.Tensor, truncation_level: int) -> torch.Tensor:
-    n = min(truncation_level, batch_x.shape[0])
-    return batch_x[:n].clone()
+def plot_results(
+    datamodule: GaussianMixtureDataModule, model: ModelWrapper, trainer: Trainer
+):
+    fig_path = os.path.join(HydraConfig.get().runtime.output_dir, "toy_plot.pdf")
+
+    dataset = datamodule.data["test"]
+    if not isinstance(dataset, TensorDataset):
+        raise ValueError("Dataset is not a TensorDataset")
+    x = dataset.tensors[0].numpy(force=True)
+    c = dataset.tensors[1].numpy(force=True)
+
+    predictions = trainer.predict(model, datamodule.predict_dataloader())
+    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
+    predicted_cluster_assignments = predictions["cluster_probs"].argmax(axis=1)
+
+    fig = plt.figure(figsize=(6, 10))
+    gs = GridSpec(4, 2, figure=fig)
+
+    ax = fig.add_subplot(gs[:2, :])
+    ax.set_title("True Cluster Assignments")
+    ax.set_xlabel("$x_1$")
+    ax.set_xticks([])
+    ax.set_ylabel("$x_2$")
+    ax.set_yticks([])
+    sns.scatterplot(
+        x=x[:, 0],
+        y=x[:, 1],
+        hue=c,
+        hue_order=range(datamodule.num_clusters),
+        palette=COLOR_PALETTE,
+        ax=ax,
+        legend=False,
+    )
+
+    ax = fig.add_subplot(gs[2:, :])
+    ax.set_title("Predicted Cluster Assignments")
+    ax.set_xlabel("$x_1$")
+    ax.set_xticks([])
+    ax.set_ylabel("$x_2$")
+    ax.set_yticks([])
+    sns.scatterplot(
+        x=x[:, 0],
+        y=x[:, 1],
+        hue=predicted_cluster_assignments,
+        hue_order=range(model.model.k),
+        palette=COLOR_PALETTE,
+        ax=ax,
+        legend=False,
+    )
+
+    plt.tight_layout()
+
+    Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(fig_path)
+
+    plt.show()
 
 
-def train(cfg: DictConfig) -> tuple[LightningDataModule, LightningModule]:
+def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
         lightning.seed_everything(cfg.seed, workers=True)
 
-    datamodule: AbstractDataModule = instantiate(cfg.data)
+    datamodule = instantiate(cfg.data)
     datamodule.setup()
 
     train_iter = iter(datamodule.train_dataloader())
@@ -72,20 +134,17 @@ def train(cfg: DictConfig) -> tuple[LightningDataModule, LightningModule]:
     )
 
     callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer: Trainer = instantiate(cfg.trainer, callbacks=callbacks)
+    trainer = instantiate(cfg.trainer, callbacks=callbacks)
 
     trainer.fit(model=model, datamodule=datamodule)
 
-    # if cfg.get("analysis"):
-    #     log_dir = Path(HydraConfig.get().runtime.output_dir)
-    #     instantiate(cfg.analysis)(log_dir=log_dir)
-
-    return datamodule, model
+    return datamodule, model, trainer
 
 
 @hydra.main(version_base=None, config_path="../../conf", config_name="experiment/toy")
 def main(cfg: DictConfig) -> None:
-    train(cfg)
+    datamodule, model, trainer = train(cfg)
+    plot_results(datamodule, model, trainer)
 
 
 if __name__ == "__main__":

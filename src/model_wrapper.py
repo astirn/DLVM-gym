@@ -4,16 +4,20 @@ from typing import Any, Protocol
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
-from torch.distributions import Categorical
+from torch.distributions import MultivariateNormal
 
 from src.metrics import ClusteringMetrics, ModelMetrics
 
 
 class ModelProtocol(Protocol):
-    def loss(self, batch: dict[str, Tensor]) -> tuple[Tensor, Categorical]: ...
+    def loss_and_cluster_probs(
+        self, batch: dict[str, Tensor]
+    ) -> tuple[Tensor, Tensor]: ...
 
     @property
     def k(self) -> int: ...
+
+    def qz(self, x: Tensor, y: Tensor | None = None) -> MultivariateNormal: ...
 
 
 class ModelWrapper(LightningModule, ABC):
@@ -32,12 +36,12 @@ class ModelWrapper(LightningModule, ABC):
         self.model_metrics = ModelMetrics()
 
     def training_step(self, batch, batch_idx):
-        loss, _ = self.model.loss(batch)
+        loss, _ = self.model.loss_and_cluster_probs(batch)
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, cluster_proportions = self.model.loss(batch)
+        loss, cluster_probs = self.model.loss_and_cluster_probs(batch)
         self.log(
             "val/loss",
             loss,
@@ -45,9 +49,7 @@ class ModelWrapper(LightningModule, ABC):
             prog_bar=True,
             batch_size=batch["x"].shape[0],
         )
-        self.clustering_metrics.update(
-            labels=batch["c"], cluster_proportions=cluster_proportions
-        )
+        self.clustering_metrics.update(labels=batch["c"], cluster_probs=cluster_probs)
 
     def on_validation_epoch_end(self) -> None:
         self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
@@ -81,10 +83,10 @@ class ModelWrapper(LightningModule, ABC):
     #     self.log_dict(self.model_metrics.compute(), on_epoch=True, prog_bar=True)
     #     self.model_metrics.reset()
 
-    # def predict_step(self, batch, batch_idx):
-    #     embeddings = self.vamp.qz(batch["x"], None).mean
-    #     qc_z = self._qc_for_z_point(embeddings)
-    #     return dict(embeddings=embeddings, cluster_probabilities=qc_z.probs)
+    def predict_step(self, batch, batch_idx):
+        embeddings = self.model.qz(batch["x"], batch.get("y")).mean
+        _, cluster_probs = self.model.loss_and_cluster_probs(batch)
+        return dict(embeddings=embeddings, cluster_probs=cluster_probs)
 
     def configure_optimizers(self):
 

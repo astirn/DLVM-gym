@@ -33,9 +33,9 @@ class AbstractVampPrior(torch.nn.Module, ABC):
         self, x: Tensor, y: Tensor | None = None
     ) -> tuple[Tensor, dist.Categorical]: ...
 
-    def loss(self, batch: dict[str, Tensor]) -> tuple[Tensor, dist.Categorical]:
+    def loss_and_cluster_probs(self, batch: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         elbo, qc_z = self.evidence_lower_bound(batch["x"], batch.get("y"))
-        return -elbo, qc_z
+        return -elbo, qc_z.probs
 
     def px(self, z: Tensor, y: Tensor | None = None) -> dist.Distribution:
         zy = torch.concat([z, y], dim=1) if y is not None else z
