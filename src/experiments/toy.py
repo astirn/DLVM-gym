@@ -4,15 +4,12 @@ import torch
 import torch.distributions as dist
 import torch.nn as nn
 from hydra.utils import instantiate
-from lightning import LightningDataModule, LightningModule
-from omegaconf import DictConfig, OmegaConf
+from lightning import LightningDataModule, LightningModule, Trainer
+from omegaconf import DictConfig
+from toolz import valmap
 
-import src.crypt as crypt
-from src.crypt.abstract import AbstractVampPrior
-from src.crypt.dp_vamp_priors import DirichletProcessVampPrior
 from src.data.abstract import AbstractDataModule
-from src.metrics import ClusteringMetrics, ModelMetrics
-from src.train import train
+from src.model_wrapper import ModelWrapper
 
 
 class Encoder(nn.Module):
@@ -59,18 +56,25 @@ def train(cfg: DictConfig) -> tuple[LightningDataModule, LightningModule]:
     datamodule: AbstractDataModule = instantiate(cfg.data)
     datamodule.setup()
 
-    train_loader = datamodule.train_dataloader()
+    train_iter = iter(datamodule.train_dataloader())
     u = torch.tensor([])
     while len(u) < int(cfg.truncation_level):
-        batch = next(iter(train_loader))
+        batch = next(train_iter)
         u = torch.cat([u, batch["x"]])
+    u = u[: int(cfg.truncation_level)]
 
-    model = instantiate(cfg.model, u=u)
+    model = ModelWrapper(
+        model=instantiate(cfg.model, u=u),
+        optimizer_params=dict(cfg.optimizer),
+        scheduler_params=(
+            dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
+        ),
+    )
 
-    # callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    # trainer: Trainer = instantiate(cfg.trainer, callbacks=callbacks)
+    callbacks = list(valmap(instantiate, cfg.callbacks).values())
+    trainer: Trainer = instantiate(cfg.trainer, callbacks=callbacks)
 
-    # trainer.fit(model=model, datamodule=datamodule)
+    trainer.fit(model=model, datamodule=datamodule)
 
     # if cfg.get("analysis"):
     #     log_dir = Path(HydraConfig.get().runtime.output_dir)

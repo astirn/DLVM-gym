@@ -19,8 +19,15 @@ def collate(
 
 class GaussianMixtureDataModule(AbstractDataModule):
 
-    def __init__(self, num_samples: dict[str, int], seed: int, **kwargs) -> None:
+    def __init__(
+        self,
+        num_clusters: int,
+        num_samples: dict[str, int],
+        seed: int,
+        **kwargs,
+    ) -> None:
         super().__init__(collate_fn=collate, **kwargs)
+        self.num_clusters = num_clusters
         self.num_samples = num_samples
         self.seed = seed
         self._proportions: torch.Tensor | None = None
@@ -33,25 +40,23 @@ class GaussianMixtureDataModule(AbstractDataModule):
     def proportions(self) -> torch.Tensor:
         if self._proportions is None:
             torch.manual_seed(self.seed)
-            self._proportions = Dirichlet(3 * torch.ones(3)).sample()
+            self._proportions = Dirichlet(3 * torch.ones(self.num_clusters)).sample()
         return self._proportions
 
     @property
     def means(self) -> torch.Tensor:
         if self._means is None:
             torch.manual_seed(self.seed)
-            self._means = torch.as_tensor(
-                [[-2, 0], [2, 2], [2, -2]], dtype=torch.float32
-            )
+            self._means = torch.randn(self.num_clusters, 2) * 3
         return self._means
 
     @property
     def covariances(self) -> torch.Tensor:
         if self._covariances is None:
             torch.manual_seed(self.seed)
-            self._covariances = Wishart(
-                3, scale_tril=0.5**0.5 * torch.eye(2) / 2
-            ).sample(torch.Size([3]))
+            self._covariances = Wishart(3, scale_tril=torch.eye(2) / 3).sample(
+                torch.Size([self.num_clusters])
+            )
         return self._covariances
 
     def _sample_mixture(self, n: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -62,7 +67,7 @@ class GaussianMixtureDataModule(AbstractDataModule):
         x_c = MultivariateNormal(
             loc=self.means, covariance_matrix=self.covariances
         ).sample(torch.Size([n]))
-        x = x_c[torch.nn.functional.one_hot(c, num_classes=3).bool()]
+        x = x_c[torch.nn.functional.one_hot(c, num_classes=self.num_clusters).bool()]
         return x, c.long()
 
     def setup(self, stage: str | None = None) -> None:
@@ -93,7 +98,7 @@ class GaussianMixtureDataModule(AbstractDataModule):
 
 if __name__ == "__main__":
     dm = GaussianMixtureDataModule(
-        num_samples={"train": 1_000, "val": 1_000, "test": 0}, seed=0
+        num_clusters=3, num_samples={"train": 1_000, "val": 1_000, "test": 0}, seed=0
     )
     dm.setup()
 

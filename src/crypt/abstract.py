@@ -29,11 +29,20 @@ class AbstractVampPrior(torch.nn.Module, ABC):
         self._u_constraint = u_constraint
 
     @abstractmethod
-    def evidence_lower_bound(self, x: Tensor, c: Tensor | None = None) -> Tensor: ...
+    def evidence_lower_bound(
+        self, x: Tensor, y: Tensor | None = None
+    ) -> tuple[Tensor, dist.Categorical]: ...
+
+    def loss(self, batch: dict[str, Tensor]) -> tuple[Tensor, dist.Categorical]:
+        elbo, qc_z = self.evidence_lower_bound(batch["x"], batch.get("y"))
+        return -elbo, qc_z
 
     def px(self, z: Tensor, y: Tensor | None = None) -> dist.Distribution:
         zy = torch.concat([z, y], dim=1) if y is not None else z
         return self._decoder(zy)
+
+    @abstractmethod
+    def qc(self, *args) -> dist.Categorical: ...
 
     def qz(self, x: Tensor, y: Tensor | None = None) -> dist.MultivariateNormal:
         xy = torch.concat([x, y], dim=1) if y is not None else x

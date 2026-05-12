@@ -12,7 +12,10 @@ class ModelMetrics(Metric):
         self.add_state("num_samples", default=torch.tensor(0.0))
 
     def update(
-        self, *, log_marginal: torch.Tensor, posterior_predictive: torch.Tensor
+        self,
+        *,
+        log_marginal: torch.Tensor,
+        posterior_predictive: torch.Tensor,
     ) -> None:
         self.log_marginal += log_marginal
         self.posterior_predictive += posterior_predictive

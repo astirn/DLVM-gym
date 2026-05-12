@@ -34,11 +34,10 @@ model:
 optimizer:
   _target_: torch.optim.AdamW
   lr: 1e-3
-  maximize: true
 
 scheduler:
   _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: ${model.optimizer.lr}
+  max_lr: ${optimizer.lr}
   total_steps: ${trainer.max_steps}
 
 trainer:

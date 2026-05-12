@@ -16,15 +16,20 @@ class ClusteringMetrics(Metric):
         self.add_state("num_samples", default=torch.tensor(0.0))
 
     def update(
-        self, *, x: torch.Tensor, c: torch.Tensor, qc_z: dist.Categorical, **kwargs
+        self,
+        *,
+        labels: torch.Tensor,
+        cluster_proportions: dist.Categorical,
     ) -> None:
-        cluster_assignments = torch.argmax(qc_z.probs, dim=1)
-        cluster_labels = c[torch.argmax(qc_z.probs, dim=0)]
+        cluster_assignments = torch.argmax(cluster_proportions.probs, dim=1)
+        cluster_labels = labels[torch.argmax(cluster_proportions.probs, dim=0)]
         self.assignments += F.one_hot(cluster_assignments, self.k).sum(dim=0)
-        self.accuracy += (c == cluster_labels[cluster_assignments]).sum()
-        self.nmi += normalized_mutual_info_score(c.cpu(), cluster_assignments.cpu())
+        self.accuracy += (labels == cluster_labels[cluster_assignments]).sum()
+        self.nmi += normalized_mutual_info_score(
+            labels.cpu(), cluster_assignments.cpu()
+        )
         self.num_batches += 1
-        self.num_samples += c.shape[0]
+        self.num_samples += labels.shape[0]
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {

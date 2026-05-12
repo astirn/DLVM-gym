@@ -96,7 +96,9 @@ class DirichletProcessVampPrior(VampPrior):
             pv = dist.Beta(1, self.concentration)
             return dist.kl_divergence(qv, pv)[:-1].sum()
 
-    def evidence_lower_bound(self, x: Tensor, c: torch.Tensor | None = None) -> Tensor:
+    def evidence_lower_bound(
+        self, x: Tensor, c: torch.Tensor | None = None
+    ) -> tuple[Tensor, dist.Categorical]:
         qz_x = self.qz(x, c)
         z = qz_x.rsample()
 
@@ -109,7 +111,7 @@ class DirichletProcessVampPrior(VampPrior):
         global_kl = self.dkl_kappa() + self.dkl_v(log_vm1)
         elbo = (local_ll - local_kl) / z.shape[0] - global_kl / self.num_data
 
-        return elbo
+        return elbo, qc_z
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):
