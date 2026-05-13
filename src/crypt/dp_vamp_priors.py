@@ -25,7 +25,7 @@ class DirichletProcessVampPrior(VampPrior):
         if concentration_prior_params is not None:
             self.register_buffer("a", torch.as_tensor(concentration_prior_params[0]))
             self.register_buffer("b", torch.as_tensor(concentration_prior_params[1]))
-            self.log_alpha_minus_1 = torch.nn.Parameter(torch.tensor(0.0))
+            self.log_alpha = torch.nn.Parameter(torch.tensor(0.0))
             self.log_beta = torch.nn.Parameter(torch.tensor(0.0))
 
         self.log_gamma = torch.nn.Parameter(torch.zeros(self.k, 2))
@@ -45,12 +45,12 @@ class DirichletProcessVampPrior(VampPrior):
         return log_v, log_vm1
 
     @property
-    def pkappa(self) -> dist.InverseGamma:
-        return dist.InverseGamma(self.get_buffer("a"), self.get_buffer("b"))
+    def pkappa(self) -> dist.Gamma:
+        return dist.Gamma(self.get_buffer("a"), self.get_buffer("b"))
 
     @property
-    def qkappa(self) -> dist.InverseGamma:
-        return dist.InverseGamma(1 + self.log_alpha_minus_1.exp(), self.log_beta.exp())
+    def qkappa(self) -> dist.Gamma:
+        return dist.Gamma(self.log_alpha.exp(), self.log_beta.exp())
 
     def qc(self, log_pz_c: Tensor, log_v: Tensor, log_vm1: Tensor) -> dist.Categorical:
         log_probs = (
@@ -88,9 +88,9 @@ class DirichletProcessVampPrior(VampPrior):
         gamma_1, gamma_2 = self.gamma
         qv = dist.Beta(gamma_1, gamma_2)
         if self.concentration is None:
-            alpha, beta = 1 + self.log_alpha_minus_1.exp(), self.log_beta.exp()
-            E_log_kappa = self.log_beta - torch.digamma(alpha)
-            E_kappa = beta / (alpha - 1)
+            alpha, beta = self.log_alpha.exp(), self.log_beta.exp()
+            E_log_kappa = torch.digamma(alpha) - self.log_beta
+            E_kappa = alpha / beta
             return (
                 -qv.entropy()[:-1].sum()
                 - (self.k - 1) * E_log_kappa
