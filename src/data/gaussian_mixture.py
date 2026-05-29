@@ -34,6 +34,14 @@ class GaussianMixtureDataModule(AbstractDataModule):
         self._means: torch.Tensor | None = None
         self._covariances: torch.Tensor | None = None
 
+    @property
+    def dim(self) -> int:
+        return 2
+
+    @property
+    def num_data(self) -> int:
+        return self.num_samples["train"]
+
     def prepare_data(self) -> None: ...
 
     @property

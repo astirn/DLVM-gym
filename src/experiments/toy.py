@@ -117,15 +117,10 @@ def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Tra
     datamodule = instantiate(cfg.data)
     datamodule.setup()
 
-    train_iter = iter(datamodule.train_dataloader())
-    u = torch.tensor([])
-    while len(u) < int(cfg.truncation_level):
-        batch = next(train_iter)
-        u = torch.cat([u, batch["x"]])
-    u = u[: int(cfg.truncation_level)]
-
     model = ModelWrapper(
-        model=instantiate(cfg.model, u=u),
+        model=instantiate(
+            cfg.model, dim_x=datamodule.dim, num_data=datamodule.num_data, k=cfg.model.k
+        ),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
