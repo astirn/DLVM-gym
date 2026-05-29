@@ -21,11 +21,11 @@ class Encoder(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(500, 500),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(500, 2000),
-            nn.ELU(),
+            nn.ReLU(),
         )
         self.mu = nn.Linear(2000, dim_z)
         self.log_sigma = nn.Linear(2000, dim_z)
@@ -42,11 +42,11 @@ class Decoder(nn.Module):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(2000, 500),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(500, 500),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(500, dim_x),
         )
         self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
@@ -64,15 +64,12 @@ def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
     datamodule.prepare_data()
     datamodule.setup()
 
-    train_iter = iter(datamodule.train_dataloader())
-    u = torch.tensor([])
-    while len(u) < int(cfg.truncation_level):
-        batch = next(train_iter)
-        u = torch.cat([u, batch["x"]])
-    u = u[: int(cfg.truncation_level)]
-
     model = ModelWrapper(
-        model=instantiate(cfg.model, u=u),
+        model=instantiate(
+            cfg.model,
+            dim_x=datamodule.dim,
+            num_data=datamodule.num_data,
+        ),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None

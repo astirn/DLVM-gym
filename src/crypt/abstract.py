@@ -13,19 +13,23 @@ class AbstractVampPrior(torch.nn.Module, ABC):
 
     def __init__(
         self,
+        dim_x: int,
+        dim_z: int,
         decoder_params: dict[str, Any],
         encoder_params: dict[str, Any],
+        k: int,
         num_data: int,
-        u: Tensor,
         u_constraint: Callable[[Tensor], Tensor] = identity,
         **kwargs,
     ):
         super().__init__()
-        self._decoder = instantiate(decoder_params)
-        self._encoder = instantiate(encoder_params)
+        self._decoder = instantiate(decoder_params, dim_x=dim_x, dim_z=dim_z)
+        self._encoder = instantiate(encoder_params, dim_x=dim_x, dim_z=dim_z)
+        self.dim_x = dim_x
+        self.dim_z = dim_z
         self.num_data = num_data
-        self.k = u.shape[0]
-        self._u = torch.nn.Parameter(u)
+        self.k = k
+        self._u = torch.nn.Parameter(torch.randn(k, dim_x))
         self._u_constraint = u_constraint
 
     @abstractmethod

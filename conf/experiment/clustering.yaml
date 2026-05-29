@@ -8,37 +8,27 @@ defaults:
   - /trainer@trainer: step_based
   - _self_
 
-dim_z: 30
-hidden_dim: 100
-seed: 0
-truncation_level: 100
+seed: null
 
 model:
   _recursive_: false
 
+  dim_z: 10
+  k: 100
+
   decoder_params:
     _target_: src.experiments.clustering.Decoder
-    dim_x: ${data.dim}
-    dim_z: ${dim_z}
 
   encoder_params:
     _target_: src.experiments.clustering.Encoder
-    dim_x: ${data.dim}
-    dim_z: ${dim_z}
-
-  num_data: ${data.num_samples.train}
 
 optimizer:
   _target_: torch.optim.AdamW
   lr: 1e-3
-
-scheduler:
-  _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: ${optimizer.lr}
-  total_steps: ${trainer.max_steps}
+  weight_decay: 0.0
 
 trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: "norm"
-  max_steps: 5000
-  val_check_interval: 500
+  max_steps: 20000
+  val_check_interval: 1000

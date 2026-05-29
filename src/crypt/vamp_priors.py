@@ -42,17 +42,7 @@ class VampPriorUnchained(VampPrior):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        qz_x = self.qz(self.u)
-        if isinstance(qz_x, dist.MultivariateNormal):
-            L = torch.linalg.cholesky(qz_x.covariance_matrix)
-        elif isinstance(qz_x, dist.Normal):
-            L = qz_x.scale.diag_embed()
-        else:
-            raise ValueError(f"Unsupported distribution type: {type(qz_x)}")
-        self.log_L = torch.nn.Parameter(
-            L.tril(-1) + torch.log(L.diagonal(dim1=-2, dim2=-1)).diag_embed()
-        )
+        self.log_L = torch.nn.Parameter(torch.zeros(self.k, self.dim_z, self.dim_z))
 
     def log_pz_c(self, z: Tensor) -> Tensor:
         mu = self.qz(self.u).loc
