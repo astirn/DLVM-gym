@@ -43,6 +43,14 @@ class AbstractDataModule(LightningDataModule, ABC):
 
         self.batch_size_per_device = {s: self.batch_size[s] for s in self.data}
 
+    @property
+    @abstractmethod
+    def dim(self) -> int | list[int] | dict[str, int | list[int]]: ...
+
+    @property
+    @abstractmethod
+    def num_data(self) -> int: ...
+
     @abstractmethod
     def prepare_data(self) -> None: ...
 
@@ -69,7 +77,8 @@ class AbstractDataModule(LightningDataModule, ABC):
         out = {
             "batch_size": self.batch_size_per_device[split],
             "num_workers": num_workers,
-            "pin_memory": self.pin_memory,
+            "persistent_workers": num_workers > 0,
+            "pin_memory": self.pin_memory and torch.cuda.is_available(),
             "worker_init_fn": worker_init_fn if num_workers > 0 else None,
         }
         if self.collate_fn is not None:

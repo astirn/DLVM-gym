@@ -61,6 +61,7 @@ def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
         lightning.seed_everything(cfg.seed, workers=True)
 
     datamodule = instantiate(cfg.data)
+    datamodule.prepare_data()
     datamodule.setup()
 
     train_iter = iter(datamodule.train_dataloader())
@@ -86,7 +87,9 @@ def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
     return datamodule, model, trainer
 
 
-@hydra.main(version_base=None, config_path="../../conf", config_name="experiment/toy")
+@hydra.main(
+    version_base=None, config_path="../../conf", config_name="experiment/clustering"
+)
 def main(cfg: DictConfig) -> None:
     train(cfg)
 
