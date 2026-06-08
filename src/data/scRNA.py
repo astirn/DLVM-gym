@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 
+import pandas as pd
 import torch
 from anndata import AnnData
 from toolz import merge_with
@@ -18,6 +19,14 @@ def collate(batch: list) -> dict[str, torch.Tensor]:
     out["x"] = (out["x"].flatten(start_dim=1) - 0.5) * 2
     out["c"] = out["c"].reshape(-1).long()
     return out
+
+
+def rename_columns(adata: AnnData, columns: dict[str, str]) -> AnnData:
+    if isinstance(adata.obs, pd.DataFrame):
+        adata.obs = adata.obs.rename(columns=columns)
+    else:
+        raise ValueError("adata.obs is not a pandas DataFrame")
+    return adata
 
 
 class scRNADataModule(AbstractDataModule):
