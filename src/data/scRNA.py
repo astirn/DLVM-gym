@@ -22,7 +22,9 @@ def collate(batch: list) -> dict[str, torch.Tensor]:
 
 class scRNADataModule(AbstractDataModule):
 
-    def __init__(self, dataset: str, prepare_data_fn: Callable, **kwargs) -> None:
+    def __init__(
+        self, dataset: str, prepare_data_fn: Callable[[str], AnnData], **kwargs
+    ) -> None:
         super().__init__(collate_fn=collate, **kwargs)
         self.dataset = dataset
         self.prepare_data_fn = prepare_data_fn
@@ -51,9 +53,7 @@ class scRNADataModule(AbstractDataModule):
         return self._num_data
 
     def prepare_data(self) -> None:
-        from toolz import compose
-
-        self._adata = self.prepare_data_fn()
+        self._adata = self.prepare_data_fn(self.root)
 
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()

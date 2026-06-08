@@ -12,8 +12,7 @@ seed: null
 data:
   _target_: src.data.scRNA.scRNADataModule
   dataset: ???
-  preprocess_fn:
-    _target_: ???
+  prepare_data_fn: ???
   batch_size: 512
   num_workers: 8
   pin_memory: true

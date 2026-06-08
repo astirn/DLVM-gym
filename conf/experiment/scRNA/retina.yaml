@@ -7,10 +7,14 @@ defaults:
 data:
   dataset: retina
   prepare_data_fn:
-    _target_: toolz.compose
-    _args:
+    _target_: toolz.compose_left
+    _args_:
       - _target_: scvi.data.retina
-      - save_path: datasets/scRNA-seq/retina
+        _partial_: true
+      - _target_: src.data.scRNA.rename_columns
+        _partial_: true
+        columns:
+          labels: cell_type
 
 model:
   dim_z: 10
