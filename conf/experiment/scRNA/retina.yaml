@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - default
+  - _self_
+
+data:
+  dataset: retina
+  prepare_data_fn:
+    _target_: toolz.compose
+    _args:
+      - _target_: scvi.data.retina
+      - save_path: datasets/scRNA-seq/retina
+
+model:
+  dim_z: 10
