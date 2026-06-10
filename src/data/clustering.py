@@ -1,3 +1,5 @@
+from math import prod
+
 import torch
 from toolz import merge_with
 from torchvision import datasets
@@ -21,17 +23,28 @@ class ClusteringDataModule(BaseDataModule):
         self.dataset = dataset
         self.root = f"datasets/clustering"
 
+        self._dim: int | None = None
+        self._num_data: int | None = None
+
     @property
     def dim(self) -> int:
-        return 784
+        if self._dim is None:
+            raise ValueError("Property is not set. Call prepare_data first.")
+        return self._dim
 
     @property
     def num_data(self) -> int:
-        return 60_000
+        if self._num_data is None:
+            raise ValueError("Property is not set. Call prepare_data first.")
+        return self._num_data
 
     def prepare_data(self) -> None:
-        getattr(datasets, self.dataset)(root=self.root, train=True, download=True)
+        train = getattr(datasets, self.dataset)(
+            root=self.root, train=True, download=True
+        )
         getattr(datasets, self.dataset)(root=self.root, train=False, download=True)
+        self._dim = prod(train.data[0].shape)
+        self._num_data = len(train)
 
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()
