@@ -1,8 +1,5 @@
-from .dp_vamp_priors import (
-    DirichletProcessVampPrior,
-    DirichletProcessVampPriorUnchained,
-)
-from .vamp_priors import VampPrior, VampPriorUnchained
+from .dp_vamppriors import DirichletProcessVampPrior, DirichletProcessVampPriorUnchained
+from .vamppriors import VampPrior, VampPriorUnchained
 
 __all__ = [
     "DirichletProcessVampPrior",

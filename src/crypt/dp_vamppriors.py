@@ -2,7 +2,7 @@ import torch
 import torch.distributions as dist
 from torch import Tensor
 
-from .vamp_priors import VampPrior, VampPriorUnchained
+from .vamppriors import VampPrior, VampPriorUnchained
 
 
 class DirichletProcessVampPrior(VampPrior):
