@@ -3,7 +3,7 @@ from toolz import merge_with
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
-from .abstract import AbstractDataModule
+from .base import BaseDataModule
 
 
 def collate(batch: list) -> dict[str, torch.Tensor]:
@@ -14,7 +14,7 @@ def collate(batch: list) -> dict[str, torch.Tensor]:
     return out
 
 
-class MNISTDataModule(AbstractDataModule):
+class MNISTDataModule(BaseDataModule):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(collate_fn=collate, **kwargs)

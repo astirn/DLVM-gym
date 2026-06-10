@@ -6,7 +6,7 @@ import torch
 from anndata import AnnData
 from torch.utils.data import Dataset
 
-from .abstract import AbstractDataModule
+from .base import BaseDataModule
 
 
 class scRNADataset(Dataset):
@@ -42,7 +42,7 @@ def collate(batch: list) -> dict[str, torch.Tensor]:
     }
 
 
-class scRNADataModule(AbstractDataModule):
+class scRNADataModule(BaseDataModule):
 
     def __init__(
         self,

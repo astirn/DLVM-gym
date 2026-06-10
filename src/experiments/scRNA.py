@@ -8,7 +8,7 @@ from lightning import Trainer
 from omegaconf import DictConfig
 from toolz import valmap
 
-from src.data import AbstractDataModule
+from src.data import scRNADataModule
 from src.model_wrapper import ModelWrapper
 
 
@@ -56,7 +56,7 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
-def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
+def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
         lightning.seed_everything(cfg.seed, workers=True)
 

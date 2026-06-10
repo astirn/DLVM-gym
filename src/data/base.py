@@ -22,7 +22,7 @@ def worker_init_fn(worker_id: int):
     )
 
 
-class AbstractDataModule(LightningDataModule, ABC):
+class BaseDataModule(LightningDataModule, ABC):
     """Abstract data module for loading and splitting data."""
 
     def __init__(self, **kwargs) -> None:

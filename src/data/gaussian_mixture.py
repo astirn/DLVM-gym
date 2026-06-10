@@ -5,7 +5,7 @@ from toolz import merge_with
 from torch.distributions import Categorical, Dirichlet, MultivariateNormal, Wishart
 from torch.utils.data import TensorDataset
 
-from .abstract import AbstractDataModule
+from .base import BaseDataModule
 
 
 def collate(
@@ -17,7 +17,7 @@ def collate(
     return out
 
 
-class GaussianMixtureDataModule(AbstractDataModule):
+class GaussianMixtureDataModule(BaseDataModule):
 
     def __init__(
         self,
