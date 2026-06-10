@@ -11,7 +11,7 @@ data:
     _args_:
       - _target_: scvi.data.retina
         _partial_: true
-      - _target_: src.data.scRNA.rename_columns
+      - _target_: src.data.utils.rename_adata_obs
         _partial_: true
         columns:
           labels: cell_type
