@@ -20,7 +20,7 @@ data:
 model:
   _recursive_: false
 
-  dim_z: 10
+  dim_z: ???
   k: 100
 
   decoder_params:

@@ -6,3 +6,6 @@ defaults:
 
 data:
   dataset: MNIST
+
+model:
+  dim_z: 10

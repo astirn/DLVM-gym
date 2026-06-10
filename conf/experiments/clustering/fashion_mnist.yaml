@@ -6,3 +6,6 @@ defaults:
 
 data:
   dataset: FashionMNIST
+
+model:
+  dim_z: 15
