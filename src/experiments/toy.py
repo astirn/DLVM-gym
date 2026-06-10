@@ -12,12 +12,19 @@ from hydra.utils import instantiate
 from lightning import Trainer
 from matplotlib.gridspec import GridSpec
 from omegaconf import DictConfig
-from toolz import merge_with, valmap
+from toolz import interleave, merge_with, pipe, valmap
+from toolz.curried import partition
 from torch.utils.data import TensorDataset
 
-from constants import COLOR_PALETTE
 from src.data import GaussianMixtureDataModule
 from src.model_wrapper import ModelWrapper
+
+COLOR_PALETTE = pipe(
+    sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),
+    partition(4),
+    interleave,
+    list,
+)
 
 
 class Encoder(nn.Module):

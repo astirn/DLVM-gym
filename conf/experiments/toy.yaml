@@ -3,12 +3,21 @@
 defaults:
   - /callbacks@callbacks: default
   - /crypt@model: dp_vamp_prior_unchained
-  - /data@data: gaussian_mixture
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
 
 seed: 0
+
+data:
+  _target_: src.data.GaussianMixtureDataModule
+  batch_size: 256
+  num_clusters: 3
+  num_samples:
+    train: 1000
+    val: 1000
+    test: 1000
+  seed: ${seed}
 
 model:
   _recursive_: false
