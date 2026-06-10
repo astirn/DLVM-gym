@@ -3,12 +3,19 @@
 defaults:
   - /callbacks@callbacks: default
   - /crypt@model: dp_vamp_prior_unchained
-  - /data@data: mnist
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
 
 seed: null
+
+data:
+  _target_: src.data.ClusteringDataModule
+  dataset: ???
+  batch_size: 512
+  num_workers: 8
+  pin_memory: true
+  root: datasets/clustering
 
 model:
   _recursive_: false

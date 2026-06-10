@@ -14,11 +14,12 @@ def collate(batch: list) -> dict[str, torch.Tensor]:
     return out
 
 
-class MNISTDataModule(BaseDataModule):
+class ClusteringDataModule(BaseDataModule):
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, dataset: str, **kwargs) -> None:
         super().__init__(collate_fn=collate, **kwargs)
-        self.root = "datasets"
+        self.dataset = dataset
+        self.root = f"datasets/clustering"
 
     @property
     def dim(self) -> int:
@@ -29,8 +30,8 @@ class MNISTDataModule(BaseDataModule):
         return 60_000
 
     def prepare_data(self) -> None:
-        datasets.MNIST(root=self.root, train=True, download=True)
-        datasets.MNIST(root=self.root, train=False, download=True)
+        getattr(datasets, self.dataset)(root=self.root, train=True, download=True)
+        getattr(datasets, self.dataset)(root=self.root, train=False, download=True)
 
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()
@@ -40,16 +41,16 @@ class MNISTDataModule(BaseDataModule):
         test_or_predict = stage in ("test", "predict") or stage is None
 
         if fit and self.data["train"] is None:
-            self.data["train"] = datasets.MNIST(
+            self.data["train"] = getattr(datasets, self.dataset)(
                 root=self.root, train=True, transform=ToTensor()
             )
 
         if (fit or validate) and self.data["val"] is None:
-            self.data["val"] = datasets.MNIST(
+            self.data["val"] = getattr(datasets, self.dataset)(
                 root=self.root, train=False, transform=ToTensor()
             )
 
         if test_or_predict and self.data["test"] is None:
-            self.data["test"] = datasets.MNIST(
+            self.data["test"] = getattr(datasets, self.dataset)(
                 root=self.root, train=False, transform=ToTensor()
             )

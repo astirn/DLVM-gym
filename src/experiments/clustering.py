@@ -8,7 +8,7 @@ from lightning import Trainer
 from omegaconf import DictConfig
 from toolz import valmap
 
-from src.data import AbstractDataModule
+from src.data import ClusteringDataModule
 from src.model_wrapper import ModelWrapper
 
 
@@ -56,7 +56,7 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
-def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
+def train(cfg: DictConfig) -> tuple[ClusteringDataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
         lightning.seed_everything(cfg.seed, workers=True)
 
@@ -85,7 +85,9 @@ def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
 
 
 @hydra.main(
-    version_base=None, config_path="../../conf", config_name="experiments/clustering"
+    version_base=None,
+    config_path="../../conf",
+    config_name="experiments/clustering/mnist",
 )
 def main(cfg: DictConfig) -> None:
     train(cfg)
