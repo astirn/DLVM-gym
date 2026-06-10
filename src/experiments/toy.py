@@ -135,7 +135,7 @@ def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Tra
     return datamodule, model, trainer
 
 
-@hydra.main(version_base=None, config_path="../../conf", config_name="experiment/toy")
+@hydra.main(version_base=None, config_path="../../conf", config_name="experiments/toy")
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = train(cfg)
     plot_results(datamodule, model, trainer)

@@ -85,7 +85,7 @@ def train(cfg: DictConfig) -> tuple[AbstractDataModule, ModelWrapper, Trainer]:
 
 
 @hydra.main(
-    version_base=None, config_path="../../conf", config_name="experiment/clustering"
+    version_base=None, config_path="../../conf", config_name="experiments/clustering"
 )
 def main(cfg: DictConfig) -> None:
     train(cfg)
