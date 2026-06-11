@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - default
+  - _self_
+
+data:
+  dataset: MNIST
+
+model:
+  dim_z: 10

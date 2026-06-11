@@ -1,0 +1,20 @@
+# @package _global_
+
+defaults:
+  - default
+  - _self_
+
+data:
+  dataset: retina
+  prepare_data_fn:
+    _target_: toolz.compose_left
+    _args_:
+      - _target_: scvi.data.retina
+        _partial_: true
+      - _target_: src.data.utils.rename_adata_obs
+        _partial_: true
+        columns:
+          labels: cell_type
+
+model:
+  dim_z: 10
