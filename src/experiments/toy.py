@@ -17,7 +17,7 @@ from toolz.curried import partition
 from torch.utils.data import TensorDataset
 
 from src.data import GaussianMixtureDataModule
-from src.model_wrapper import ModelWrapper
+from src.models import ModelWrapper
 
 COLOR_PALETTE = pipe(
     sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),

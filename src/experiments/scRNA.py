@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 from toolz import valmap
 
 from src.data import scRNADataModule
-from src.model_wrapper import ModelWrapper
+from src.models import ModelWrapper
 
 
 class Encoder(nn.Module):
