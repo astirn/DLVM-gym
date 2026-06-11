@@ -2,7 +2,7 @@
 
 defaults:
   - /callbacks@callbacks: default
-  - /crypt@model: dp_vampprior_unchained
+  - /priors/crypt@model: dp_vampprior_unchained
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
