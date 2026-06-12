@@ -5,9 +5,11 @@ from .abstracts import Prior
 
 
 class StandardNormalPrior(Prior):
-    def __init__(self, dim: int, **kwargs):
+    def __init__(self, *, dim_z: int, **kwargs):
         super().__init__()
-        self.pz = MultivariateNormal(loc=torch.zeros(dim), scale_tril=torch.eye(dim))
+        self.pz = MultivariateNormal(
+            loc=torch.zeros(dim_z), scale_tril=torch.eye(dim_z)
+        )
 
     def dkl(self, qz_x: MultivariateNormal) -> torch.Tensor:
         return kl_divergence(qz_x, self.pz).mean()

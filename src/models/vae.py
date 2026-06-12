@@ -14,19 +14,17 @@ class VariationalAutoencoder(torch.nn.Module, ModelProtocol):
 
     def __init__(
         self,
-        dim_x: int,
-        dim_z: int,
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
-        prior: PriorTypes,
+        prior_params: dict[str, Any],
         **kwargs,
     ):
         super().__init__()
-        self.dim_x = dim_x
-        self.dim_z = dim_z
-        self.encoder = instantiate(encoder_params, dim_x=dim_x, dim_z=dim_z)
-        self.decoder = instantiate(decoder_params, dim_x=dim_x, dim_z=dim_z)
-        self.prior = prior
+        self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
+        self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
+        self.prior: PriorTypes = instantiate(
+            prior_params, encoder=self.encoder, **kwargs
+        )
 
     def qz(self, x: Tensor) -> MultivariateNormal:
         return self.encoder(x)

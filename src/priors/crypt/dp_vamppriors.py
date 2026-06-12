@@ -10,17 +10,19 @@ class DirichletProcessVampPrior(VampPrior):
     def __init__(
         self,
         *,
+        num_data: int,
         concentration: float | None = None,
         concentration_prior_params: tuple[float, float] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
+        self.num_data = num_data
+
         if (concentration is None) == (concentration_prior_params is None):
             raise ValueError(
                 "Specify either concentration or concentration_prior_params"
             )
-
         self.concentration = concentration
         if concentration_prior_params is not None:
             self.register_buffer("a", torch.as_tensor(concentration_prior_params[0]))
@@ -100,22 +102,14 @@ class DirichletProcessVampPrior(VampPrior):
             pv = dist.Beta(1, self.concentration)
             return dist.kl_divergence(qv, pv)[:-1].sum()
 
-    def evidence_lower_bound(
-        self, x: Tensor, c: torch.Tensor | None = None
-    ) -> tuple[Tensor, dist.Categorical]:
-        qz_x = self.qz(x, c)
+    def dkl(self, qz_x: dist.Distribution) -> Tensor:
         z = qz_x.rsample()
-
         log_pz_c = self.log_pz_c(z)
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
-
-        local_ll = self.px(z, c).log_prob(x).sum()
         local_kl = self.dkl_z(qz_x, qc_z, log_pz_c) + self.dkl_c(qc_z, log_v, log_vm1)
         global_kl = self.dkl_kappa() + self.dkl_v(log_vm1)
-        elbo = (local_ll - local_kl) / z.shape[0] - global_kl / self.num_data
-
-        return elbo, qc_z
+        return local_kl.mean() + global_kl / self.num_data
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):

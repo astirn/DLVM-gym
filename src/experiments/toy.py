@@ -28,7 +28,7 @@ COLOR_PALETTE = pipe(
 
 
 class Encoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, hidden_dim: int):
+    def __init__(self, dim_x: int, dim_z: int, hidden_dim: int, **kwargs):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, hidden_dim),
@@ -45,7 +45,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int, hidden_dim: int):
+    def __init__(self, dim_x: int, dim_z: int, hidden_dim: int, **kwargs):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, hidden_dim),
@@ -126,7 +126,7 @@ def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Tra
 
     model = ModelWrapper(
         model=instantiate(
-            cfg.model, dim_x=datamodule.dim, num_data=datamodule.num_data, k=cfg.model.k
+            cfg.model, dim_x=datamodule.dim, num_data=datamodule.num_data
         ),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(

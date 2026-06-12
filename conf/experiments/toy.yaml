@@ -2,7 +2,7 @@
 
 defaults:
   - /callbacks@callbacks: default
-  - /priors/crypt@model: dp_vampprior_unchained
+  - /priors@model.prior_params: crypt/dp_vampprior_unchained
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
@@ -20,18 +20,22 @@ data:
   seed: ${seed}
 
 model:
+  _target_: src.models.VariationalAutoencoder
   _recursive_: false
-
-  dim_z: 1
-  k: 40
   
-  decoder_params:
-    _target_: src.experiments.toy.Decoder
-    hidden_dim: 100
+  dim_z: 1
 
   encoder_params:
     _target_: src.experiments.toy.Encoder
     hidden_dim: 100
+
+  decoder_params:
+    _target_: src.experiments.toy.Decoder
+    hidden_dim: 100
+
+  prior_params:
+    dim_z: ${model.dim_z}
+    k: 100
 
 optimizer:
   _target_: torch.optim.AdamW

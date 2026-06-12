@@ -1,3 +1,4 @@
-from .model_wrapper import ModelWrapper
+from .vae import VariationalAutoencoder
+from .wrapper import ModelWrapper
 
-__all__ = ["ModelWrapper"]
+__all__ = ["ModelWrapper", "VariationalAutoencoder"]

@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import Any, Protocol
 
-import torch
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
