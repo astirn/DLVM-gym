@@ -1,0 +1,63 @@
+from abc import ABC
+from typing import Any, Protocol
+
+import torch
+from hydra.utils import instantiate
+from lightning import LightningModule
+from torch import Tensor
+
+
+class ModelProtocol(Protocol):
+    def loss(
+        self, batch: dict[str, Tensor], update_metrics: bool = False
+    ) -> Tensor: ...
+
+    def metrics(self) -> dict[str, float]: ...
+
+
+class ModelWrapper(LightningModule, ABC):
+    def __init__(
+        self,
+        model: ModelProtocol,
+        *,
+        optimizer_params: dict[str, Any] | None = None,
+        scheduler_params: dict[str, Any] | None = None,
+    ) -> None:
+        LightningModule.__init__(self)
+        self.model = model
+        self.optimizer_params = optimizer_params
+        self.scheduler_params = scheduler_params
+
+    def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
+        loss = self.model.loss(batch, update_metrics=False)
+        self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.model.loss(batch, update_metrics=True)
+        self.log(
+            "val/loss",
+            loss,
+            on_epoch=True,
+            prog_bar=True,
+            batch_size=batch["x"].shape[0],
+        )
+
+    def on_validation_epoch_end(self) -> None:
+        self.log_dict(self.model.metrics(), on_epoch=True, prog_bar=True)
+
+    def configure_optimizers(self):
+
+        optimizer = instantiate(self.optimizer_params, params=self.parameters())
+
+        if self.scheduler_params is None:
+            return optimizer
+
+        scheduler = instantiate(self.scheduler_params, optimizer=optimizer)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+            },
+        }
