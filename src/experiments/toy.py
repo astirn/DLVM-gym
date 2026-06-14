@@ -123,6 +123,7 @@ def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Tra
         lightning.seed_everything(cfg.seed, workers=True)
 
     datamodule = instantiate(cfg.data)
+    datamodule.prepare_data()
     datamodule.setup()
 
     model = ModelWrapper(
