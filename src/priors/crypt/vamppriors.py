@@ -1,8 +1,8 @@
 import math
 
 import torch
-import torch.distributions as dist
 from torch import Tensor
+from torch.distributions import Categorical, Distribution, MultivariateNormal
 
 from .abstract import AbstractVampPrior
 
@@ -16,13 +16,19 @@ class VampPrior(AbstractVampPrior):
         pz_c = self._encoder(self.u)
         return pz_c.log_prob(z[:, None])
 
-    def qc(self, log_pz_c: Tensor) -> dist.Categorical:
-        return dist.Categorical(logits=log_pz_c)
+    def qc(self, log_pz_c: Tensor) -> Categorical:
+        return Categorical(logits=log_pz_c)
 
-    def dkl(self, qz_x: dist.Distribution) -> Tensor:
+    def dkl(self, qz_x: Distribution) -> Tensor:
         log_pz_c = self.log_pz_c(qz_x.rsample())
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
+
+    def global_distributions(self) -> dict[str, Distribution]:
+        return {}
+
+    def local_distributions(self, qz_x: MultivariateNormal) -> dict[str, Distribution]:
+        return {"qc_z": self.qc(self.log_pz_c(qz_x.rsample()))}
 
 
 class VampPriorUnchained(VampPrior):
@@ -37,5 +43,5 @@ class VampPriorUnchained(VampPrior):
             self.log_L.tril(-1)
             + (self.log_L.diagonal(dim1=-2, dim2=-1)).exp().diag_embed()
         )
-        pz_c = dist.MultivariateNormal(loc=mu, scale_tril=L)
+        pz_c = MultivariateNormal(loc=mu, scale_tril=L)
         return pz_c.log_prob(z[:, None])

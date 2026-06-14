@@ -42,7 +42,7 @@ metrics:
     - _target_: src.metrics.ClusteringMetrics
       k: ${model.prior_params.k}
       label_key: c
-      props_key: qc
+      props_key: qc_z
 
 optimizer:
   _target_: torch.optim.AdamW

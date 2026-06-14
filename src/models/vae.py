@@ -37,6 +37,6 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         return {**{"qz_x": qz_x, "px_z": px_z}, **self.prior.local_distributions(qz_x)}
 
     def loss(self, batch: dict[str, Tensor]) -> Tensor:
-        qz_x, px_z = self.local_distributions(batch).values()
+        qz_x, px_z = tuple(self.local_distributions(batch).values())[:2]
         elbo = px_z.log_prob(batch["x"]).mean() - self.prior.dkl(qz_x)
         return -elbo
