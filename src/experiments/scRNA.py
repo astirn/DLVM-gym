@@ -1,15 +1,10 @@
 import hydra
-import lightning
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-from hydra.utils import instantiate
-from lightning import Trainer
 from omegaconf import DictConfig
-from toolz import valmap
 
-from src.data import scRNADataModule
-from src.models import ModelWrapper
+from src.train import train
 
 
 class Encoder(nn.Module):
@@ -50,36 +45,6 @@ class Decoder(nn.Module):
     def forward(self, z: torch.Tensor) -> dist.Distribution:
         scale = self.log_sigma.exp()
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
-
-
-def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
-    if cfg.get("seed"):
-        lightning.seed_everything(cfg.seed, workers=True)
-
-    datamodule = instantiate(cfg.data)
-    datamodule.prepare_data()
-    datamodule.setup()
-
-    model = ModelWrapper(
-        model=instantiate(
-            cfg.model,
-            dim_x=datamodule.dim,
-            num_data=datamodule.num_data,
-        ),
-        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
-        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
-        optimizer_params=dict(cfg.optimizer),
-        scheduler_params=(
-            dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
-        ),
-    )
-
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
-
-    trainer.fit(model=model, datamodule=datamodule)
-
-    return datamodule, model, trainer
 
 
 @hydra.main(

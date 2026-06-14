@@ -1,24 +1,23 @@
 from pathlib import Path
 
 import hydra
-import lightning
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 from hydra.core.hydra_config import HydraConfig
-from hydra.utils import instantiate
 from lightning import Trainer
 from matplotlib.gridspec import GridSpec
 from omegaconf import DictConfig
-from toolz import interleave, merge_with, pipe, valmap
+from toolz import interleave, merge_with, pipe
 from toolz.curried import partition
 from torch.utils.data import TensorDataset
 
 from src.data import GaussianMixtureDataModule
 from src.models import ModelWrapper
 from src.models.utils import concat_distributions
+from src.train import train
 
 COLOR_PALETTE = pipe(
     sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),
@@ -116,34 +115,6 @@ def plot_results(
     fig.savefig(fig_path)
 
     plt.show()
-
-
-def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Trainer]:
-    if cfg.get("seed"):
-        lightning.seed_everything(cfg.seed, workers=True)
-
-    datamodule = instantiate(cfg.data)
-    datamodule.prepare_data()
-    datamodule.setup()
-
-    model = ModelWrapper(
-        model=instantiate(
-            cfg.model, dim_x=datamodule.dim, num_data=datamodule.num_data
-        ),
-        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
-        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
-        optimizer_params=dict(cfg.optimizer),
-        scheduler_params=(
-            dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
-        ),
-    )
-
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
-
-    trainer.fit(model=model, datamodule=datamodule)
-
-    return datamodule, model, trainer
 
 
 @hydra.main(version_base=None, config_path="../../conf", config_name="experiments/toy")
