@@ -1,7 +1,7 @@
 import torch
 from torch.distributions import MultivariateNormal, kl_divergence
 
-from .abstracts import Prior
+from .abstract import Prior
 
 
 class StandardNormalPrior(Prior):

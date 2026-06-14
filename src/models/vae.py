@@ -5,7 +5,7 @@ from hydra.utils import instantiate
 from torch import Tensor
 from torch.distributions import Distribution, MultivariateNormal
 
-from src.priors import PriorTypes
+from src.priors import Prior
 
 from .abstract import DeepLatentVariableModel
 
@@ -22,9 +22,7 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         super().__init__()
         self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
         self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
-        self.prior: PriorTypes = instantiate(
-            prior_params, encoder=self.encoder, **kwargs
-        )
+        self.prior: Prior = instantiate(prior_params, encoder=self.encoder, **kwargs)
 
     def qz(self, x: Tensor) -> MultivariateNormal:
         return self.encoder(x)
@@ -32,9 +30,13 @@ class VariationalAutoencoder(DeepLatentVariableModel):
     def px(self, z: Tensor) -> Distribution:
         return self.decoder(z)
 
-    def loss(self, batch: dict[str, Tensor]) -> Tensor:
-        x = batch["x"]
-        qz_x = self.qz(x)
+    def local_distributions(self, batch: dict[str, Tensor]) -> dict[str, Distribution]:
+        qz_x = self.qz(batch["x"])
         z = qz_x.rsample()
-        elbo = self.px(z).log_prob(x).mean() - self.prior.dkl(qz_x)
+        px_z = self.px(z)
+        return {**{"qz_x": qz_x, "px_z": px_z}, **self.prior.local_distributions(qz_x)}
+
+    def loss(self, batch: dict[str, Tensor]) -> Tensor:
+        qz_x, px_z = self.local_distributions(batch).values()
+        elbo = px_z.log_prob(batch["x"]).mean() - self.prior.dkl(qz_x)
         return -elbo

@@ -4,6 +4,7 @@ from typing import Any
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
+from torch.distributions import Distribution
 from torchmetrics import Metric
 
 from .abstract import DeepLatentVariableModel
@@ -32,7 +33,10 @@ class ModelWrapper(LightningModule, ABC):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.model.loss(batch, update_metrics=True)
+        loss = self.model.loss(batch)
+        local_distributions = self.model.local_distributions(batch)
+        for metric in self.validation_metrics:
+            metric.update(batch, local_distributions)
         self.log(
             "val/loss",
             loss,
@@ -45,6 +49,9 @@ class ModelWrapper(LightningModule, ABC):
         for metric in self.validation_metrics:
             self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
             metric.reset()
+
+    def predict_step(self, batch, batch_idx) -> dict[str, Distribution]:
+        return self.model.local_distributions(batch)
 
     def configure_optimizers(self):
 

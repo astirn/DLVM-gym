@@ -6,10 +6,10 @@ from toolz import identity
 from torch import Tensor
 from torch.distributions import MultivariateNormal
 
-from src.priors.abstracts import ClusteringPrior
+from src.priors.abstract import Prior
 
 
-class AbstractVampPrior(ClusteringPrior, ABC):
+class AbstractVampPrior(Prior, ABC):
 
     def __init__(
         self,

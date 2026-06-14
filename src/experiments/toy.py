@@ -128,6 +128,8 @@ def train(cfg: DictConfig) -> tuple[GaussianMixtureDataModule, ModelWrapper, Tra
         model=instantiate(
             cfg.model, dim_x=datamodule.dim, num_data=datamodule.num_data
         ),
+        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
+        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
