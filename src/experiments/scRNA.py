@@ -13,11 +13,7 @@ from src.models import ModelWrapper
 
 
 class Encoder(nn.Module):
-    def __init__(
-        self,
-        dim_x: int,
-        dim_z: int,
-    ):
+    def __init__(self, dim_x: int, dim_z: int, **kwargs):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
@@ -38,7 +34,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(self, dim_x: int, dim_z: int, **kwargs):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
@@ -70,6 +66,8 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
             dim_x=datamodule.dim,
             num_data=datamodule.num_data,
         ),
+        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
+        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None

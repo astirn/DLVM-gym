@@ -2,7 +2,8 @@
 
 defaults:
   - /callbacks@callbacks: default
-  - /priors/crypt@model: dp_vampprior_unchained
+  - /priors@model.prior_params: crypt/dp_vampprior_unchained
+  - /metrics@metrics: default
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
@@ -20,16 +21,23 @@ data:
 
 
 model:
+  _target_: src.models.scVI
   _recursive_: false
 
   dim_z: ???
-  k: 100
 
   decoder_params:
-    _target_: src.experiments.scRNA-seq.Decoder
+    _target_: src.experiments.scRNA.Decoder
 
   encoder_params:
-    _target_: src.experiments.scRNA-seq.Encoder
+    _target_: src.experiments.scRNA.Encoder
+
+metrics:
+  validation_metrics:
+    - _target_: src.metrics.ClusteringMetrics
+      k: ${model.prior_params.k}
+      label_key: c
+      props_key: qc_z
 
 optimizer:
   _target_: torch.optim.AdamW
