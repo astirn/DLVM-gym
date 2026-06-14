@@ -18,6 +18,7 @@ from torch.utils.data import TensorDataset
 
 from src.data import GaussianMixtureDataModule
 from src.models import ModelWrapper
+from src.models.utils import concat_distributions
 
 COLOR_PALETTE = pipe(
     sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),
@@ -70,9 +71,9 @@ def plot_results(
     x = dataset.tensors[0].numpy(force=True)
     c = dataset.tensors[1].numpy(force=True)
 
-    predictions = trainer.predict(model, datamodule.predict_dataloader())
-    predictions = merge_with(lambda x: torch.vstack(x).cpu().numpy(), predictions)
-    predicted_cluster_assignments = predictions["cluster_probs"].argmax(axis=1)
+    distributions = trainer.predict(model, datamodule.predict_dataloader())
+    distributions = merge_with(concat_distributions, distributions)
+    predicted_cluster_assignments = distributions["qc_z"].probs.argmax(axis=1)
 
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
@@ -87,7 +88,7 @@ def plot_results(
         x=x[:, 0],
         y=x[:, 1],
         hue=c,
-        hue_order=range(datamodule.num_clusters),
+        hue_order=range(len(COLOR_PALETTE)),
         palette=COLOR_PALETTE,
         ax=ax,
         legend=False,
@@ -103,7 +104,7 @@ def plot_results(
         x=x[:, 0],
         y=x[:, 1],
         hue=predicted_cluster_assignments,
-        hue_order=range(model.model.k),
+        hue_order=range(len(COLOR_PALETTE)),
         palette=COLOR_PALETTE,
         ax=ax,
         legend=False,
