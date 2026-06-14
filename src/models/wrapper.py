@@ -1,22 +1,18 @@
 from abc import ABC
-from typing import Any, Protocol
+from typing import Any
 
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
 from torchmetrics import Metric
 
-
-class ModelProtocol(Protocol):
-    def loss(
-        self, batch: dict[str, Tensor], update_metrics: bool = False
-    ) -> Tensor: ...
+from .abstract import DeepLatentVariableModel
 
 
 class ModelWrapper(LightningModule, ABC):
     def __init__(
         self,
-        model: ModelProtocol,
+        model: DeepLatentVariableModel,
         *,
         validation_metrics: list[Metric] | None = None,
         test_metrics: list[Metric] | None = None,

@@ -7,10 +7,10 @@ from torch.distributions import Distribution, MultivariateNormal
 
 from src.priors import PriorTypes
 
-from .wrapper import ModelProtocol
+from .abstract import DeepLatentVariableModel
 
 
-class VariationalAutoencoder(torch.nn.Module, ModelProtocol):
+class VariationalAutoencoder(DeepLatentVariableModel):
 
     def __init__(
         self,
