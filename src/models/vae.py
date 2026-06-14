@@ -32,16 +32,9 @@ class VariationalAutoencoder(torch.nn.Module, ModelProtocol):
     def px(self, z: Tensor) -> Distribution:
         return self.decoder(z)
 
-    def loss(self, batch: dict[str, Tensor], update_metrics: bool = False) -> Tensor:
+    def loss(self, batch: dict[str, Tensor]) -> Tensor:
         x = batch["x"]
         qz_x = self.qz(x)
         z = qz_x.rsample()
         elbo = self.px(z).log_prob(x).mean() - self.prior.dkl(qz_x)
-
-        if update_metrics:
-            pass
-
         return -elbo
-
-    def metrics(self) -> dict[str, float]:
-        return {}

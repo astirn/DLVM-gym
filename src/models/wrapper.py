@@ -4,6 +4,7 @@ from typing import Any, Protocol
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
+from torchmetrics import Metric
 
 
 class ModelProtocol(Protocol):
@@ -11,24 +12,26 @@ class ModelProtocol(Protocol):
         self, batch: dict[str, Tensor], update_metrics: bool = False
     ) -> Tensor: ...
 
-    def metrics(self) -> dict[str, float]: ...
-
 
 class ModelWrapper(LightningModule, ABC):
     def __init__(
         self,
         model: ModelProtocol,
         *,
+        validation_metrics: list[Metric] | None = None,
+        test_metrics: list[Metric] | None = None,
         optimizer_params: dict[str, Any] | None = None,
         scheduler_params: dict[str, Any] | None = None,
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
+        self.validation_metrics = validation_metrics or []
+        self.test_metrics = test_metrics or []
         self.optimizer_params = optimizer_params
         self.scheduler_params = scheduler_params
 
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
-        loss = self.model.loss(batch, update_metrics=False)
+        loss = self.model.loss(batch)
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
@@ -43,7 +46,9 @@ class ModelWrapper(LightningModule, ABC):
         )
 
     def on_validation_epoch_end(self) -> None:
-        self.log_dict(self.model.metrics(), on_epoch=True, prog_bar=True)
+        for metric in self.validation_metrics:
+            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+            metric.reset()
 
     def configure_optimizers(self):
 

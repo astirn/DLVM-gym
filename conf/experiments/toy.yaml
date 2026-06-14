@@ -3,6 +3,7 @@
 defaults:
   - /callbacks@callbacks: default
   - /priors@model.prior_params: crypt/dp_vampprior_unchained
+  - /metrics@metrics: default
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
@@ -35,7 +36,13 @@ model:
 
   prior_params:
     dim_z: ${model.dim_z}
-    k: 100
+
+metrics:
+  validation_metrics:
+    - _target_: src.metrics.ClusteringMetrics
+      k: ${model.prior_params.k}
+      label_key: c
+      props_key: qc
 
 optimizer:
   _target_: torch.optim.AdamW
