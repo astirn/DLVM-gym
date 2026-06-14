@@ -5,7 +5,7 @@ from omegaconf import DictConfig
 from toolz import valmap
 
 from src.data import BaseDataModule
-from src.models import ModelWrapper
+from src.model_wrapper import ModelWrapper
 
 
 def train(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:

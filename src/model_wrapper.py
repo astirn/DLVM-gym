@@ -7,7 +7,7 @@ from torch import Tensor
 from torch.distributions import Distribution
 from torchmetrics import Metric
 
-from .abstract import DeepLatentVariableModel
+from src.models.abstract import DeepLatentVariableModel
 
 
 class ModelWrapper(LightningModule, ABC):

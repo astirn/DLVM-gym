@@ -15,9 +15,9 @@ from toolz.curried import partition
 from torch.utils.data import TensorDataset
 
 from src.data import GaussianMixtureDataModule
-from src.models import ModelWrapper
-from src.models.utils import concat_distributions
+from src.model_wrapper import ModelWrapper
 from src.train import train
+from src.utils import concat_distributions
 
 COLOR_PALETTE = pipe(
     sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),
@@ -120,7 +120,10 @@ def plot_results(
 @hydra.main(version_base=None, config_path="../../conf", config_name="experiments/toy")
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = train(cfg)
-    plot_results(datamodule, model, trainer)
+    if isinstance(datamodule, GaussianMixtureDataModule):
+        plot_results(datamodule, model, trainer)
+    else:
+        raise ValueError("Dataset is not a GaussianMixtureDataModule")
 
 
 if __name__ == "__main__":
