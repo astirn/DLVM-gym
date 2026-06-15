@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 import scipy.sparse as sp
@@ -7,6 +8,13 @@ from anndata import AnnData
 from torch.utils.data import Dataset
 
 from .base import BaseDataModule
+
+
+@dataclass
+class scRNABatch:
+    x: torch.Tensor
+    c: torch.Tensor
+    s: torch.Tensor
 
 
 class scRNADataset(Dataset):
@@ -24,22 +32,21 @@ class scRNADataset(Dataset):
     def __len__(self) -> int:
         return self.counts.shape[0]  # type: ignore[attr-defined]
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> scRNABatch:
         x = self.counts[idx].todense().astype(np.float32)
-        return (
-            torch.from_numpy(x),
-            self.batch_codes[idx].long(),
-            self.cell_type_codes[idx].long(),
+        return scRNABatch(
+            x=torch.from_numpy(x),
+            c=self.batch_codes[idx].long(),
+            s=self.cell_type_codes[idx].long(),
         )
 
 
-def collate(batch: list) -> dict[str, torch.Tensor]:
-    x, c, s = zip(*batch)
-    return {
-        "x": torch.vstack(x),
-        "c": torch.hstack(c),
-        "s": torch.hstack(s),
-    }
+def collate(batch: list[scRNABatch]) -> scRNABatch:
+    return scRNABatch(
+        x=torch.vstack([b.x for b in batch]),
+        c=torch.hstack([b.c for b in batch]),
+        s=torch.hstack([b.s for b in batch]),
+    )
 
 
 class scRNADataModule(BaseDataModule):
