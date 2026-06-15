@@ -3,7 +3,7 @@ from typing import Any
 
 from hydra.utils import instantiate
 from lightning import LightningModule
-from torch import Tensor
+from torch import Tensor, nn
 from torch.distributions import Distribution
 from torchmetrics import Metric
 
@@ -22,8 +22,8 @@ class ModelWrapper(LightningModule, ABC):
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
-        self.validation_metrics = validation_metrics or []
-        self.test_metrics = test_metrics or []
+        self.validation_metrics = nn.ModuleList(validation_metrics or [])
+        self.test_metrics = nn.ModuleList(test_metrics or [])
         self.optimizer_params = optimizer_params
         self.scheduler_params = scheduler_params
 
@@ -36,7 +36,8 @@ class ModelWrapper(LightningModule, ABC):
         loss = self.model.loss(batch)
         local_distributions = self.model.local_distributions(batch)
         for metric in self.validation_metrics:
-            metric.update(batch, local_distributions)
+            if isinstance(metric, Metric):
+                metric.update(batch, local_distributions)
         self.log(
             "val/loss",
             loss,
@@ -47,8 +48,9 @@ class ModelWrapper(LightningModule, ABC):
 
     def on_validation_epoch_end(self) -> None:
         for metric in self.validation_metrics:
-            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
-            metric.reset()
+            if isinstance(metric, Metric):
+                self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+                metric.reset()
 
     def predict_step(self, batch, batch_idx) -> dict[str, Distribution]:
         return self.model.local_distributions(batch)
