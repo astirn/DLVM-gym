@@ -22,10 +22,14 @@ class scVI(DeepLatentVariableModel):
     ):
         super().__init__()
         self.num_batches = kwargs["num_batches"]
+        self.num_genes = kwargs["num_genes"]
         self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
         self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
         self.prior: Prior = instantiate(
-            prior_params, dim_x=kwargs["num_genes"], encoder=self.encoder, **kwargs
+            prior_params,
+            dim_x=kwargs["num_genes"] + self.num_batches,
+            encoder=self.encoder,
+            **kwargs,
         )
 
     def qz(self, x: Tensor, s: Tensor) -> MultivariateNormal:
