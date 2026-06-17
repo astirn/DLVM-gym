@@ -15,7 +15,7 @@ from src.model_wrapper import ModelWrapper
 
 class NegativeBinomial(dist.Distribution):
     def __init__(self, mu: torch.Tensor, theta: torch.Tensor, eps: float = 1e-8):
-        super().__init__()
+        super().__init__(validate_args=False)
         self.mu = mu
         self.theta = theta
         self.eps = eps
@@ -43,7 +43,7 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
         rho: torch.Tensor,
         eps: float = 1e-8,
     ):
-        super().__init__()
+        super().__init__(validate_args=False)
         self.mu = mu
         self.theta = theta
         self.rho = rho
