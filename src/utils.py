@@ -1,6 +1,8 @@
 import torch
 import torch.distributions as dist
 
+from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+
 
 def concat_distributions(distributions: list[dist.Distribution]) -> dist.Distribution:
     if not distributions:
@@ -50,6 +52,29 @@ def concat_distributions(distributions: list[dist.Distribution]) -> dist.Distrib
             covariance_matrix=torch.concat(
                 [d.covariance_matrix for d in multivariate_normals]
             ),
+        )
+
+    if isinstance(first, NegativeBinomial):
+        negative_binomials: list[NegativeBinomial] = [
+            d for d in distributions if isinstance(d, NegativeBinomial)
+        ]
+        if len(negative_binomials) != len(distributions):
+            raise ValueError("All distributions must be NegativeBinomial")
+        return NegativeBinomial(
+            mu=torch.concat([d.mu for d in negative_binomials]),
+            theta=torch.concat([d.theta for d in negative_binomials]),
+        )
+
+    if isinstance(first, ZeroInflatedNegativeBinomial):
+        zero_inflated_negative_binomials: list[ZeroInflatedNegativeBinomial] = [
+            d for d in distributions if isinstance(d, ZeroInflatedNegativeBinomial)
+        ]
+        if len(zero_inflated_negative_binomials) != len(distributions):
+            raise ValueError("All distributions must be ZeroInflatedNegativeBinomial")
+        return ZeroInflatedNegativeBinomial(
+            mu=torch.concat([d.mu for d in zero_inflated_negative_binomials]),
+            theta=torch.concat([d.theta for d in zero_inflated_negative_binomials]),
+            rho=torch.concat([d.rho for d in zero_inflated_negative_binomials]),
         )
 
     raise ValueError(f"Unsupported distribution type: {type(first)}")
