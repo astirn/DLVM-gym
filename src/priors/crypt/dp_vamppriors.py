@@ -31,13 +31,23 @@ class DirichletProcessVampPrior(VampPrior):
                 "Specify either concentration or concentration_prior_params"
             )
         self.concentration = concentration
-        if concentration_prior_params is not None:
+
+        log_gamma_init = torch.zeros(self.k, 2)
+
+        if concentration is not None:
+            log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
+
+        elif concentration_prior_params is not None:
             self.register_buffer("a", torch.as_tensor(concentration_prior_params[0]))
             self.register_buffer("b", torch.as_tensor(concentration_prior_params[1]))
             self.log_alpha = torch.nn.Parameter(torch.tensor(0.0))
             self.log_beta = torch.nn.Parameter(torch.tensor(0.0))
+            log_gamma_init[:, 1] = (
+                torch.ones(self.k)
+                * (concentration_prior_params[0] / concentration_prior_params[1])
+            ).log()
 
-        self.log_gamma = torch.nn.Parameter(torch.zeros(self.k, 2))
+        self.log_gamma = torch.nn.Parameter(log_gamma_init)
 
     @property
     def gamma(self) -> tuple[torch.Tensor, torch.Tensor]:
