@@ -29,3 +29,6 @@ model:
     dim_hidden: 128
     num_layers: 1
     gene_likelihood: zinb
+
+optimizer:
+  lr: 4e-4

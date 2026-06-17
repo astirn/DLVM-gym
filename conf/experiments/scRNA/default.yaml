@@ -39,7 +39,7 @@ metrics:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1e-3
+  lr: ???
   weight_decay: 0.0
 
 trainer:
