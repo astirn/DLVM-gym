@@ -146,8 +146,9 @@ def analyis(
     distributions = merge_with(concat_distributions, distributions)
     z = distributions["qz_xs"].sample()
     adata = datamodule.adata
-    adata.obsm["scVI"] = z.numpy()
-    df = scib_metrics(adata, ["scVI"])
+    adata.obsm[embedding_key] = z.cpu().numpy(force=True)
+    df = scib_metrics(adata, [embedding_key])
+    print(df)
 
 
 @hydra.main(version_base=None, config_path="../../conf")

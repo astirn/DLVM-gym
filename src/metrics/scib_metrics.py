@@ -5,7 +5,7 @@ from scib_metrics.benchmark import BatchCorrection, Benchmarker
 
 def scib_metrics(data: AnnData, embedding_obsm_keys: list[str]) -> pd.DataFrame:
 
-    if data.obs["batch"].nunique() == 1:
+    if data.obs["batch"].nunique() > 1:
         batch_correction_metrics = BatchCorrection(
             bras=True,
             ilisi_knn=True,
