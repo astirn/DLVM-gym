@@ -11,11 +11,14 @@ data:
     _args_:
       - _target_: scvi.data.cortex
         _partial_: true
-      - _target_: scanpy.pp.highly_variable_genes
+      - _target_: toolz.do
         _partial_: true
-        n_top_genes: 558
-        flavor: seurat_v3
-        subset: true
+        _args_:
+          - _target_: scanpy.pp.highly_variable_genes
+            _partial_: true
+            n_top_genes: 558
+            flavor: seurat_v3
+            subset: true
       - _target_: src.data.utils.constant_batch
         _partial_: true
 
