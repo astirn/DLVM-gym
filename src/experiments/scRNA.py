@@ -188,9 +188,7 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     return datamodule, model, trainer
 
 
-@hydra.main(
-    version_base=None, config_path="../../conf", config_name="experiments/scRNA/retina"
-)
+@hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
     train(cfg)
 
