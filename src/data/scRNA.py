@@ -48,7 +48,7 @@ class scRNADataModule(BaseDataModule):
         dataset: str,
         prepare_data_fn: Callable[[str], AnnData],
         val_ratio: float = 0.1,
-        test_ratio: float = 0.1,
+        test_ratio: float = 0.0,
         seed: int | None = None,
         **kwargs,
     ) -> None:
@@ -66,6 +66,10 @@ class scRNADataModule(BaseDataModule):
         self._batch_codes: torch.Tensor | None = None
         self._cell_type_keys: list[str] | None = None
         self._cell_type_codes: torch.Tensor | None = None
+
+    @property
+    def adata(self) -> AnnData:
+        return self.prepare_data_fn(self.root)
 
     @property
     def counts(self) -> sp.csr_matrix:
@@ -118,7 +122,8 @@ class scRNADataModule(BaseDataModule):
 
         fit = stage == "fit" or stage is None
         validate = stage == "validate" or stage is None
-        test_or_predict = stage in ("test", "predict") or stage is None
+        test = stage == "test" or stage is None
+        predict = stage == "predict" or stage is None
 
         rng = np.random.default_rng(self.seed)
         idx = rng.permutation(self.num_cells)
@@ -130,6 +135,7 @@ class scRNADataModule(BaseDataModule):
         train_idx = idx[:n_train]
         val_idx = idx[n_train : n_train + n_val]
         test_idx = idx[n_train + n_val :]
+        predict_idx = np.arange(self.num_cells)
 
         if fit and self.data["train"] is None:
             self.data["train"] = scRNADataset(
@@ -145,9 +151,16 @@ class scRNADataModule(BaseDataModule):
                 self.cell_type_codes[val_idx],
             )
 
-        if test_or_predict and self.data["test"] is None:
+        if test and self.data["test"] is None:
             self.data["test"] = scRNADataset(
                 self.counts[test_idx],
                 self.batch_codes[test_idx],
                 self.cell_type_codes[test_idx],
+            )
+
+        if predict and self.data["predict"] is None:
+            self.data["predict"] = scRNADataset(
+                self.counts[predict_idx],
+                self.batch_codes[predict_idx],
+                self.cell_type_codes[predict_idx],
             )
