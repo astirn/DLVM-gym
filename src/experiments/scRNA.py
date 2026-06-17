@@ -7,9 +7,11 @@ import torch.nn.functional as F
 from hydra.utils import instantiate
 from lightning import Trainer
 from omegaconf import DictConfig
-from toolz import concat, valmap
+from toolz import concat, merge_with, valmap
 
 from src.data.scRNA import scRNADataModule
+from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+from src.metrics.scib_metrics import scib_metrics
 from src.model_wrapper import ModelWrapper
 from src.utils import concat_distributions
 
@@ -129,12 +131,29 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
 
     trainer.fit(model=model, datamodule=datamodule)
 
+    checkpoint = torch.load(
+        trainer.checkpoint_callback.best_model_path, weights_only=True
+    )
+    model.load_state_dict(checkpoint["state_dict"])
+
     return datamodule, model, trainer
+
+
+def analyis(
+    cfg: DictConfig, datamodule: scRNADataModule, model: ModelWrapper, trainer: Trainer
+) -> None:
+    distributions = trainer.predict(model, datamodule.predict_dataloader())
+    distributions = merge_with(concat_distributions, distributions)
+    z = distributions["qz_xs"].sample()
+    adata = datamodule.adata
+    adata.obsm["scVI"] = z.numpy()
+    df = scib_metrics(adata, ["scVI"])
 
 
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    train(cfg)
+    datamodule, model, trainer = train(cfg)
+    analyis(cfg, datamodule, model, trainer)
 
 
 if __name__ == "__main__":
