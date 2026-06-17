@@ -19,7 +19,6 @@ data:
   pin_memory: true
   root: datasets/scRNA-seq
 
-
 model:
   _target_: src.models.scVI
   _recursive_: false
