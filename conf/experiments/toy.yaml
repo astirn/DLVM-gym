@@ -14,10 +14,7 @@ data:
   _target_: src.data.GaussianMixtureDataModule
   batch_size: 256
   num_clusters: 3
-  num_samples:
-    train: 1000
-    val: 1000
-    test: 1000
+  num_data: 1000
   seed: ${seed}
 
 model:
