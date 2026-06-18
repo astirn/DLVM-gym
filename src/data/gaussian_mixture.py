@@ -20,6 +20,7 @@ class GaussianMixtureDataModule(BaseDataModule):
         self._num_clusters = num_clusters
         self._num_data = num_data
         self._seed = seed
+
         self._proportions: torch.Tensor | None = None
         self._means: torch.Tensor | None = None
         self._covariances: torch.Tensor | None = None

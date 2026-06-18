@@ -49,21 +49,22 @@ class ClusteringDataModule(BaseDataModule):
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()
 
-        fit = stage == "fit" or stage is None
-        validate = stage == "validate" or stage is None
-        test_or_predict = stage in ("test", "predict") or stage is None
-
-        if fit and self.data["train"] is None:
+        if (stage == "fit" or stage is None) and self.data["train"] is None:
             self.data["train"] = getattr(datasets, self.dataset)(
                 root=self.root, train=True, transform=ToTensor()
             )
 
-        if (fit or validate) and self.data["val"] is None:
+        if (stage in ("fit", "validate") or stage is None) and self.data["val"] is None:
             self.data["val"] = getattr(datasets, self.dataset)(
                 root=self.root, train=False, transform=ToTensor()
             )
 
-        if test_or_predict and self.data["test"] is None:
+        if (stage == "test" or stage is None) and self.data["test"] is None:
             self.data["test"] = getattr(datasets, self.dataset)(
+                root=self.root, train=False, transform=ToTensor()
+            )
+
+        if (stage == "predict" or stage is None) and self.data["predict"] is None:
+            self.data["predict"] = getattr(datasets, self.dataset)(
                 root=self.root, train=False, transform=ToTensor()
             )
