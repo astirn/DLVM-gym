@@ -32,7 +32,6 @@ model:
 
   prior_params:
     dim_z: ${model.dim_z}
-    concentration: 1.0
 
 metrics:
   validation_metrics:
