@@ -15,9 +15,9 @@ from toolz.curried import partition
 from torch.utils.data import TensorDataset
 
 from src.data import GaussianMixtureDataModule
+from src.distributions import concat_distributions
 from src.model_wrapper import ModelWrapper
 from src.train import train
-from src.utils import concat_distributions
 
 COLOR_PALETTE = pipe(
     sns.color_palette("tab20c", n_colors=20) + sns.color_palette("tab20b", n_colors=20),
@@ -32,7 +32,9 @@ class Encoder(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, hidden_dim),
-            nn.Tanh(),
+            nn.ELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ELU(),
         )
         self.mu = nn.Linear(hidden_dim, dim_z)
         self.log_sigma = nn.Linear(hidden_dim, dim_z)
@@ -49,14 +51,16 @@ class Decoder(nn.Module):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, hidden_dim),
-            nn.Tanh(),
+            nn.ELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ELU(),
             nn.Linear(hidden_dim, dim_x),
         )
-        self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
+        self.log_sigma = nn.Parameter(torch.zeros(dim_x))
 
     def forward(self, z: torch.Tensor) -> dist.Distribution:
-        scale = self.log_sigma.exp()
-        return dist.Independent(dist.Normal(self.mu(z), scale), 1)
+        sigma = self.log_sigma.exp()
+        return dist.MultivariateNormal(self.mu(z), scale_tril=torch.diag_embed(sigma))
 
 
 def plot_results(
@@ -64,7 +68,7 @@ def plot_results(
 ):
     fig_path = Path(HydraConfig.get().runtime.output_dir) / "toy_plot.pdf"
 
-    dataset = datamodule.data["test"]
+    dataset = datamodule.data["predict"]
     if not isinstance(dataset, TensorDataset):
         raise ValueError("Dataset is not a TensorDataset")
     x = dataset.tensors[0].numpy(force=True)
@@ -72,7 +76,7 @@ def plot_results(
 
     distributions = trainer.predict(model, datamodule.predict_dataloader())
     distributions = merge_with(concat_distributions, distributions)
-    predicted_cluster_assignments = distributions["qc_z"].probs.argmax(axis=1)
+    cluster_assignments = distributions["qc_z"].probs.argmax(axis=1)
 
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
@@ -102,7 +106,7 @@ def plot_results(
     sns.scatterplot(
         x=x[:, 0],
         y=x[:, 1],
-        hue=predicted_cluster_assignments,
+        hue=cluster_assignments,
         hue_order=range(len(COLOR_PALETTE)),
         palette=COLOR_PALETTE,
         ax=ax,
