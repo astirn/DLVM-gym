@@ -83,7 +83,8 @@ class GaussianMixtureDataModule(BaseDataModule):
 
         fit = stage == "fit" or stage is None
         validate = stage == "validate" or stage is None
-        test_or_predict = stage == "test" or stage == "predict" or stage is None
+        test = stage == "test" or stage is None
+        predict = stage == "predict" or stage is None
 
         if fit and self.data["train"] is None:
             torch.manual_seed(self.seed + 1)
@@ -97,10 +98,16 @@ class GaussianMixtureDataModule(BaseDataModule):
                 *self._sample_mixture(self.num_samples["val"])
             )
 
-        if test_or_predict and self.data["test"] is None:
+        if test and self.data["test"] is None:
             torch.manual_seed(self.seed + 3)
             self.data["test"] = TensorDataset(
                 *self._sample_mixture(self.num_samples["test"])
+            )
+
+        if predict and self.data["predict"] is None:
+            torch.manual_seed(self.seed + 4)
+            self.data["predict"] = TensorDataset(
+                *self._sample_mixture(self.num_samples["predict"])
             )
 
 
