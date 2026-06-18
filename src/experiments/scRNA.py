@@ -1,5 +1,6 @@
 import hydra
 import lightning
+import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
@@ -38,7 +39,7 @@ class Encoder(nn.Module):
                     [
                         [
                             nn.Linear(dims[i], dims[i + 1]),
-                            nn.BatchNorm1d(dims[i + 1], momentum=0.01, eps=0.001),
+                            nn.LayerNorm(dims[i + 1]),
                             nn.ReLU(),
                             nn.Dropout(0.1),
                         ]
@@ -77,7 +78,7 @@ class Decoder(nn.Module):
                     [
                         [
                             nn.Linear(dims[i], dims[i + 1]),
-                            nn.BatchNorm1d(dims[i + 1], momentum=0.01, eps=0.001),
+                            nn.LayerNorm(dims[i + 1]),
                             nn.ReLU(),
                         ]
                         for i in range(len(dims) - 1)
@@ -133,11 +134,6 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     trainer = instantiate(cfg.trainer, callbacks=callbacks)
 
     trainer.fit(model=model, datamodule=datamodule)
-
-    checkpoint = torch.load(
-        trainer.checkpoint_callback.best_model_path, weights_only=True
-    )
-    model.load_state_dict(checkpoint["state_dict"])
 
     return datamodule, model, trainer
 
