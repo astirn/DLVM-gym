@@ -10,10 +10,13 @@ from omegaconf import DictConfig
 from toolz import concat, merge_with, valmap
 
 from src.data.scRNA import scRNADataModule
-from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+from src.distributions import (
+    NegativeBinomial,
+    ZeroInflatedNegativeBinomial,
+    concat_distributions,
+)
 from src.metrics.scib_metrics import scib_metrics
 from src.model_wrapper import ModelWrapper
-from src.utils import concat_distributions
 
 
 class Encoder(nn.Module):
