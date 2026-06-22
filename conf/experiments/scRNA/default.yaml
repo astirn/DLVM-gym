@@ -8,7 +8,7 @@ defaults:
   - /trainer@trainer: step_based
   - _self_
 
-seed: null
+seed: 123
 
 data:
   _target_: src.data.scRNA.scRNADataModule
@@ -31,6 +31,10 @@ model:
   encoder_params:
     _target_: src.experiments.scRNA.Encoder
 
+  prior_params:
+    dim_z: ${model.dim_z}
+    concentration: 5.0
+
 metrics:
   validation_metrics:
     - _target_: src.metrics.ClusteringMetrics
@@ -46,4 +50,4 @@ trainer:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: "norm"
   max_steps: 20000
-  val_check_interval: 1000
+  val_check_interval: 50

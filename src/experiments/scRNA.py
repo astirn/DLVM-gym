@@ -115,12 +115,37 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     datamodule.prepare_data()
     datamodule.setup()
 
+    train_iter = iter(datamodule.train_dataloader())
+    x_samples = []
+    s_samples = []
+    c_samples = []
+    num_samples = 0
+    while num_samples < 100:
+        batch = next(train_iter)
+        x_samples.append(batch["x"])
+        s_samples.append(batch["s"])
+        c_samples.append(batch["c"])
+        num_samples += batch["x"].shape[0]
+
+    x_samples = torch.vstack(x_samples)[:100]
+    s_samples = torch.hstack(s_samples)[:100]
+    c_samples = torch.hstack(c_samples)[:100]
+
+    u_initial = torch.concat(
+        [
+            x_samples.log1p(),
+            F.one_hot(s_samples, num_classes=len(datamodule.batch_keys)).float(),
+        ],
+        dim=1,
+    )
+
     model = ModelWrapper(
         model=instantiate(
             cfg.model,
             num_batches=len(datamodule.batch_keys),
             num_data=datamodule.num_cells,
             num_genes=datamodule.num_genes,
+            u_initial=u_initial,
         ),
         validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
         test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),

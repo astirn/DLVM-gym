@@ -29,8 +29,14 @@ class scVI(DeepLatentVariableModel):
             prior_params,
             dim_x=kwargs["num_genes"] + self.num_batches,
             encoder=self.encoder,
+            u_constraint=self.u_constraint,
             **kwargs,
         )
+
+    def u_constraint(self, u: Tensor) -> Tensor:
+        x = u[:, : self.num_genes]
+        s = u[:, self.num_genes :]
+        return torch.concat([F.softplus(x), F.softmax(s, dim=-1)], dim=1)
 
     def qz(self, x: Tensor, s: Tensor) -> MultivariateNormal:
         xs = torch.concat([x, s], dim=1)
