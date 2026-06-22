@@ -24,21 +24,20 @@ class scRNADataset(Dataset):
     def __len__(self) -> int:
         return self.counts.shape[0]  # type: ignore[attr-defined]
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         x = self.counts[idx].todense().astype(np.float32)
-        return (
-            torch.from_numpy(x),
-            self.batch_codes[idx].long(),
-            self.cell_type_codes[idx].long(),
-        )
+        return {
+            "x": torch.from_numpy(x),
+            "c": self.cell_type_codes[idx].long(),
+            "s": self.batch_codes[idx].long(),
+        }
 
 
-def collate(batch: list) -> dict[str, torch.Tensor]:
-    x, c, s = zip(*batch)
+def collate(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
     return {
-        "x": torch.vstack(x),
-        "c": torch.hstack(c),
-        "s": torch.hstack(s),
+        "x": torch.vstack([b["x"] for b in batch]),
+        "c": torch.hstack([b["c"] for b in batch]),
+        "s": torch.hstack([b["s"] for b in batch]),
     }
 
 
@@ -49,7 +48,7 @@ class scRNADataModule(BaseDataModule):
         dataset: str,
         prepare_data_fn: Callable[[str], AnnData],
         val_ratio: float = 0.1,
-        test_ratio: float = 0.1,
+        test_ratio: float = 0.0,
         seed: int | None = None,
         **kwargs,
     ) -> None:
@@ -67,6 +66,10 @@ class scRNADataModule(BaseDataModule):
         self._batch_codes: torch.Tensor | None = None
         self._cell_type_keys: list[str] | None = None
         self._cell_type_codes: torch.Tensor | None = None
+
+    @property
+    def adata(self) -> AnnData:
+        return self.prepare_data_fn(self.root)
 
     @property
     def counts(self) -> sp.csr_matrix:
@@ -119,7 +122,8 @@ class scRNADataModule(BaseDataModule):
 
         fit = stage == "fit" or stage is None
         validate = stage == "validate" or stage is None
-        test_or_predict = stage in ("test", "predict") or stage is None
+        test = stage == "test" or stage is None
+        predict = stage == "predict" or stage is None
 
         rng = np.random.default_rng(self.seed)
         idx = rng.permutation(self.num_cells)
@@ -131,6 +135,7 @@ class scRNADataModule(BaseDataModule):
         train_idx = idx[:n_train]
         val_idx = idx[n_train : n_train + n_val]
         test_idx = idx[n_train + n_val :]
+        predict_idx = np.arange(self.num_cells)
 
         if fit and self.data["train"] is None:
             self.data["train"] = scRNADataset(
@@ -146,9 +151,16 @@ class scRNADataModule(BaseDataModule):
                 self.cell_type_codes[val_idx],
             )
 
-        if test_or_predict and self.data["test"] is None:
+        if test and self.data["test"] is None:
             self.data["test"] = scRNADataset(
                 self.counts[test_idx],
                 self.batch_codes[test_idx],
                 self.cell_type_codes[test_idx],
+            )
+
+        if predict and self.data["predict"] is None:
+            self.data["predict"] = scRNADataset(
+                self.counts[predict_idx],
+                self.batch_codes[predict_idx],
+                self.cell_type_codes[predict_idx],
             )

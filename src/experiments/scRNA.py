@@ -1,75 +1,154 @@
 import hydra
 import lightning
+import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
+import torch.nn.functional as F
 from hydra.utils import instantiate
 from lightning import Trainer
 from omegaconf import DictConfig
-from toolz import valmap
+from toolz import concat, merge_with, valmap
 
-from src.data import scRNADataModule
+from src.data.scRNA import scRNADataModule
+from src.distributions import (
+    NegativeBinomial,
+    ZeroInflatedNegativeBinomial,
+    concat_distributions,
+)
+from src.metrics.scib_metrics import scib_metrics
 from src.model_wrapper import ModelWrapper
 
 
 class Encoder(nn.Module):
     def __init__(
         self,
-        dim_x: int,
+        *,
         dim_z: int,
+        dim_hidden: int,
+        num_batches: int,
+        num_genes: int,
+        num_layers: int,
+        **kwargs,
     ):
         super().__init__()
+        dims = [num_genes + num_batches] + [dim_hidden] * num_layers
         self.net = nn.Sequential(
-            nn.Linear(dim_x, 500),
-            nn.ReLU(),
-            nn.Linear(500, 500),
-            nn.ReLU(),
-            nn.Linear(500, 2000),
-            nn.ReLU(),
+            *list(
+                concat(
+                    [
+                        [
+                            nn.Linear(dims[i], dims[i + 1]),
+                            nn.LayerNorm(dims[i + 1]),
+                            nn.ReLU(),
+                            nn.Dropout(0.1),
+                        ]
+                        for i in range(len(dims) - 1)
+                    ]
+                )
+            )
         )
-        self.mu = nn.Linear(2000, dim_z)
-        self.log_sigma = nn.Linear(2000, dim_z)
+        self.mu = nn.Linear(dims[-1], dim_z)
+        self.log_sigma = nn.Linear(dims[-1], dim_z)
 
-    def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(x)
+    def forward(self, xs: torch.Tensor) -> dist.MultivariateNormal:
+        out = self.net(xs)
         mu = self.mu(out)
-        sigma = self.log_sigma(out).exp()
+        sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
 class Decoder(nn.Module):
-    def __init__(self, dim_x: int, dim_z: int):
+    def __init__(
+        self,
+        *,
+        dim_z: int,
+        dim_hidden: int,
+        gene_likelihood: str,
+        num_batches: int,
+        num_genes: int,
+        num_layers: int,
+        **kwargs,
+    ):
         super().__init__()
-        self.mu = nn.Sequential(
-            nn.Linear(dim_z, 2000),
-            nn.ReLU(),
-            nn.Linear(2000, 500),
-            nn.ReLU(),
-            nn.Linear(500, 500),
-            nn.ReLU(),
-            nn.Linear(500, dim_x),
+        dims = [dim_z + num_batches] + [dim_hidden] * num_layers
+        self.net = nn.Sequential(
+            *list(
+                concat(
+                    [
+                        [
+                            nn.Linear(dims[i], dims[i + 1]),
+                            nn.LayerNorm(dims[i + 1]),
+                            nn.ReLU(),
+                        ]
+                        for i in range(len(dims) - 1)
+                    ]
+                )
+            )
         )
-        self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
+        self.gene_likelihood = gene_likelihood
+        self.log_theta = nn.Parameter(torch.zeros(num_genes))
+        self.fw = nn.Sequential(
+            nn.Linear(dims[-1], num_genes),
+            nn.Softmax(dim=1),
+        )
+        self.fh = nn.Linear(dims[-1], num_genes)
 
-    def forward(self, z: torch.Tensor) -> dist.Distribution:
-        scale = self.log_sigma.exp()
-        return dist.Independent(dist.Normal(self.mu(z), scale), 1)
+    def forward(self, zs: torch.Tensor, library_size: torch.Tensor):
+        out = self.net(zs)
+        mu = self.fw(out) * library_size
+        theta = self.log_theta.exp()
+        if self.gene_likelihood == "nb":
+            return NegativeBinomial(mu, theta)
+        elif self.gene_likelihood == "zinb":
+            rho = self.fh(out)
+            return ZeroInflatedNegativeBinomial(mu, theta, rho)
+        else:
+            raise NotImplementedError
 
 
 def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
         lightning.seed_everything(cfg.seed, workers=True)
 
-    datamodule = instantiate(cfg.data)
+    datamodule: scRNADataModule = instantiate(cfg.data)
     datamodule.prepare_data()
     datamodule.setup()
+
+    train_iter = iter(datamodule.train_dataloader())
+    x_samples = []
+    s_samples = []
+    c_samples = []
+    num_samples = 0
+    while num_samples < 100:
+        batch = next(train_iter)
+        x_samples.append(batch["x"])
+        s_samples.append(batch["s"])
+        c_samples.append(batch["c"])
+        num_samples += batch["x"].shape[0]
+
+    x_samples = torch.vstack(x_samples)[:100]
+    s_samples = torch.hstack(s_samples)[:100]
+    c_samples = torch.hstack(c_samples)[:100]
+
+    u_initial = torch.concat(
+        [
+            x_samples.log1p(),
+            F.one_hot(s_samples, num_classes=len(datamodule.batch_keys)).float(),
+        ],
+        dim=1,
+    )
 
     model = ModelWrapper(
         model=instantiate(
             cfg.model,
-            dim_x=datamodule.dim,
-            num_data=datamodule.num_data,
+            num_batches=len(datamodule.batch_keys),
+            num_data=datamodule.num_cells,
+            num_genes=datamodule.num_genes,
+            u_initial=u_initial,
         ),
+        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
+        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
@@ -84,11 +163,27 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     return datamodule, model, trainer
 
 
-@hydra.main(
-    version_base=None, config_path="../../conf", config_name="experiments/scRNA/retina"
-)
+def analyis(
+    cfg: DictConfig, datamodule: scRNADataModule, model: ModelWrapper, trainer: Trainer
+) -> None:
+    model_name = cfg.model["_target_"].split(".")[-1]
+    prior_name = cfg.model.prior_params["_target_"].split(".")[-1]
+    embedding_key = f"{model_name} - {prior_name}"
+
+    distributions = trainer.predict(model, datamodule.predict_dataloader())
+    distributions = merge_with(concat_distributions, distributions)
+    z = distributions["qz_xs"].sample()
+    adata = datamodule.adata
+    adata.obsm[embedding_key] = z.cpu().numpy(force=True)
+    df = scib_metrics(adata, [embedding_key])
+    with pd.option_context("display.max_colwidth", None, "display.width", None):
+        print(df)
+
+
+@hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    train(cfg)
+    datamodule, model, trainer = train(cfg)
+    analyis(cfg, datamodule, model, trainer)
 
 
 if __name__ == "__main__":

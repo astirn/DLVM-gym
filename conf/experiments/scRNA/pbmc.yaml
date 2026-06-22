@@ -1,0 +1,34 @@
+# @package _global_
+
+defaults:
+  - default
+  - _self_
+
+data:
+  dataset: pbmc
+  prepare_data_fn:
+    _target_: toolz.compose_left
+    _args_:
+      - _target_: scvi.data.pbmc_dataset
+        _partial_: true
+      - _target_: src.data.utils.rename_adata_obs
+        _partial_: true
+        columns:
+          str_labels: cell_type
+
+model:
+  dim_z: 10
+
+  encoder_params:
+    _target_: src.experiments.scRNA.Encoder
+    dim_hidden: 128
+    num_layers: 1
+
+  decoder_params:
+    _target_: src.experiments.scRNA.Decoder
+    dim_hidden: 128
+    num_layers: 1
+    gene_likelihood: zinb
+
+optimizer:
+  lr: 4e-4

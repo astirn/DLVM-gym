@@ -18,3 +18,17 @@ data:
 
 model:
   dim_z: 10
+
+  encoder_params:
+    _target_: src.experiments.scRNA.Encoder
+    dim_hidden: 128
+    num_layers: 1
+
+  decoder_params:
+    _target_: src.experiments.scRNA.Decoder
+    dim_hidden: 128
+    num_layers: 1
+    gene_likelihood: zinb
+
+optimizer:
+  lr: 5e-4

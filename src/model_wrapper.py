@@ -1,47 +1,43 @@
 from abc import ABC
-from typing import Any, Protocol
+from typing import Any
 
 from hydra.utils import instantiate
 from lightning import LightningModule
-from torch import Tensor
-from torch.distributions import MultivariateNormal
+from torch import Tensor, nn
+from torch.distributions import Distribution
+from torchmetrics import Metric
 
-from src.metrics import ClusteringMetrics, ModelMetrics
-
-
-class ModelProtocol(Protocol):
-    def loss_and_cluster_probs(
-        self, batch: dict[str, Tensor]
-    ) -> tuple[Tensor, Tensor]: ...
-
-    @property
-    def k(self) -> int: ...
-
-    def qz(self, x: Tensor, y: Tensor | None = None) -> MultivariateNormal: ...
+from src.models.abstract import DeepLatentVariableModel
 
 
 class ModelWrapper(LightningModule, ABC):
     def __init__(
         self,
-        model: ModelProtocol,
+        model: DeepLatentVariableModel,
         *,
+        validation_metrics: list[Metric] | None = None,
+        test_metrics: list[Metric] | None = None,
         optimizer_params: dict[str, Any] | None = None,
         scheduler_params: dict[str, Any] | None = None,
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
+        self.validation_metrics = nn.ModuleList(validation_metrics or [])
+        self.test_metrics = nn.ModuleList(test_metrics or [])
         self.optimizer_params = optimizer_params
         self.scheduler_params = scheduler_params
-        self.clustering_metrics = ClusteringMetrics(k=self.model.k)
-        self.model_metrics = ModelMetrics()
 
-    def training_step(self, batch, batch_idx):
-        loss, _ = self.model.loss_and_cluster_probs(batch)
+    def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
+        loss = self.model.loss(batch)
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, cluster_probs = self.model.loss_and_cluster_probs(batch)
+        loss = self.model.loss(batch)
+        local_distributions = self.model.local_distributions(batch)
+        for metric in self.validation_metrics:
+            if isinstance(metric, Metric):
+                metric.update(batch, local_distributions)
         self.log(
             "val/loss",
             loss,
@@ -49,44 +45,15 @@ class ModelWrapper(LightningModule, ABC):
             prog_bar=True,
             batch_size=batch["x"].shape[0],
         )
-        self.clustering_metrics.update(labels=batch["c"], cluster_probs=cluster_probs)
 
     def on_validation_epoch_end(self) -> None:
-        self.log_dict(self.clustering_metrics.compute(), on_epoch=True, prog_bar=True)
-        self.clustering_metrics.reset()
+        for metric in self.validation_metrics:
+            if isinstance(metric, Metric):
+                self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+                metric.reset()
 
-    # def test_step(self, batch, batch_idx):
-    #     x = batch["x"]
-    #     S = self.num_sampling_steps
-    #     elbo_draws = [self.vamp.evidence_lower_bound(x, None) for _ in range(S)]
-    #     log_marginal = (
-    #         torch.logsumexp(torch.stack(elbo_draws), dim=0)
-    #         - torch.tensor(S, dtype=torch.float32, device=x.device).log()
-    #     )
-    #     log_marginal = log_marginal.mean()
-
-    #     qz_x = self.vamp.qz(x, None)
-    #     log_liks = [
-    #         self.vamp.px(qz_x.rsample(), None).log_prob(x).sum() for _ in range(S)
-    #     ]
-    #     posterior_predictive = (
-    #         torch.logsumexp(torch.stack(log_liks), dim=0)
-    #         - torch.tensor(S, dtype=torch.float32, device=x.device).log()
-    #     )
-    #     posterior_predictive = posterior_predictive.mean()
-
-    #     self.model_metrics.update(
-    #         log_marginal=log_marginal, posterior_predictive=posterior_predictive
-    #     )
-
-    # def on_test_epoch_end(self) -> None:
-    #     self.log_dict(self.model_metrics.compute(), on_epoch=True, prog_bar=True)
-    #     self.model_metrics.reset()
-
-    def predict_step(self, batch, batch_idx):
-        embeddings = self.model.qz(batch["x"], batch.get("y")).mean
-        _, cluster_probs = self.model.loss_and_cluster_probs(batch)
-        return dict(embeddings=embeddings, cluster_probs=cluster_probs)
+    def predict_step(self, batch, batch_idx) -> dict[str, Distribution]:
+        return self.model.local_distributions(batch)
 
     def configure_optimizers(self):
 

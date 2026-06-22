@@ -1,4 +1,5 @@
 defaults:
+  - early_stopping
   - model_checkpoint
   - step_based_progress_bar
   - _self_

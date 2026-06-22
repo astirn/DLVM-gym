@@ -1,0 +1,2 @@
+_target_: src.priors.StandardNormalPrior
+dim_z: ???

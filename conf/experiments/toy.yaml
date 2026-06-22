@@ -2,36 +2,44 @@
 
 defaults:
   - /callbacks@callbacks: default
-  - /crypt@model: dp_vampprior_unchained
+  - /priors@model.prior_params: crypt/dp_vampprior_unchained
+  - /metrics@metrics: default
   - /hydra@hydra: default
   - /trainer@trainer: step_based
   - _self_
 
-seed: 0
+seed: 123
 
 data:
   _target_: src.data.GaussianMixtureDataModule
   batch_size: 256
   num_clusters: 3
-  num_samples:
-    train: 1000
-    val: 1000
-    test: 1000
+  num_data: 1000
   seed: ${seed}
 
 model:
+  _target_: src.models.VariationalAutoencoder
   _recursive_: false
-
-  dim_z: 1
-  k: 40
   
-  decoder_params:
-    _target_: src.experiments.toy.Decoder
-    hidden_dim: 100
+  dim_z: 1
 
   encoder_params:
     _target_: src.experiments.toy.Encoder
     hidden_dim: 100
+
+  decoder_params:
+    _target_: src.experiments.toy.Decoder
+    hidden_dim: 100
+
+  prior_params:
+    dim_z: ${model.dim_z}
+    concentration: 5.0
+
+metrics:
+  validation_metrics:
+    - _target_: src.metrics.ClusteringMetrics
+      label_key: c
+      props_key: qc_z
 
 optimizer:
   _target_: torch.optim.AdamW

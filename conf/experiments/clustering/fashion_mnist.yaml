@@ -9,3 +9,6 @@ data:
 
 model:
   dim_z: 15
+
+  prior_params:
+    concentration: 1.0

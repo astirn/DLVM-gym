@@ -29,7 +29,12 @@ class BaseDataModule(LightningDataModule, ABC):
         super().__init__()
         batch_size: int | dict[str, int] = kwargs.get("batch_size", 32)
         if isinstance(batch_size, int):
-            batch_size = {"train": batch_size, "val": batch_size, "test": batch_size}
+            batch_size = {
+                "train": batch_size,
+                "val": batch_size,
+                "test": batch_size,
+                "predict": batch_size,
+            }
         self.batch_size: dict[str, int] = batch_size
         self.num_workers: int | dict[str, int] = kwargs.get("num_workers", 0)
         self.pin_memory: bool = kwargs.get("pin_memory", False)
@@ -39,6 +44,7 @@ class BaseDataModule(LightningDataModule, ABC):
             "train": None,
             "val": None,
             "test": None,
+            "predict": None,
         }
 
         self.batch_size_per_device = {s: self.batch_size[s] for s in self.data}
@@ -108,11 +114,11 @@ class BaseDataModule(LightningDataModule, ABC):
         )
 
     def predict_dataloader(self) -> DataLoader:
-        if self.data["test"] is None:
-            raise ValueError("No test dataset found")
+        if self.data["predict"] is None:
+            raise ValueError("No predict dataset found")
         return DataLoader(
-            dataset=self.data["test"],
+            dataset=self.data["predict"],
             shuffle=False,
             drop_last=False,
-            **self._dl_kwargs(split="test"),
+            **self._dl_kwargs(split="predict"),
         )
