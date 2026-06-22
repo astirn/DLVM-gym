@@ -28,7 +28,7 @@ def scib_metrics(data: AnnData, embedding_obsm_keys: list[str]) -> pd.DataFrame:
         label_key="cell_type",
         embedding_obsm_keys=embedding_obsm_keys,
         batch_correction_metrics=batch_correction_metrics,
-        n_jobs=1,
+        n_jobs=-1,
     )
     bm.benchmark()
 
