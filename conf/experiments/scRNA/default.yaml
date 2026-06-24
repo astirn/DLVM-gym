@@ -41,6 +41,9 @@ metrics:
     - _target_: src.metrics.ClusteringMetrics
       label_key: c
 
+  test_metrics:
+    - _target_: src.metrics.ModelMetrics
+
 optimizer:
   _target_: torch.optim.AdamW
   lr: ???

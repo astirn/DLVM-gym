@@ -22,8 +22,8 @@ class ModelWrapper(LightningModule, ABC):
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
-        self.validation_metrics = nn.ModuleList(validation_metrics or [])
-        self.test_metrics = nn.ModuleList(test_metrics or [])
+        self.validation_metrics = validation_metrics or []
+        self.test_metrics = test_metrics or []
         self.optimizer_params = optimizer_params
         self.scheduler_params = scheduler_params
 
@@ -34,10 +34,6 @@ class ModelWrapper(LightningModule, ABC):
 
     def validation_step(self, batch, batch_idx):
         loss = self.model.loss(batch)
-        local_distributions = self.model.local_distributions(batch)
-        for metric in self.validation_metrics:
-            if isinstance(metric, Metric):
-                metric.update(batch, local_distributions)
         self.log(
             "val/loss",
             loss,
@@ -45,12 +41,22 @@ class ModelWrapper(LightningModule, ABC):
             prog_bar=True,
             batch_size=batch["x"].shape[0],
         )
+        for metric in self.validation_metrics:
+            metric.update(batch, self.model)
 
     def on_validation_epoch_end(self) -> None:
         for metric in self.validation_metrics:
-            if isinstance(metric, Metric):
-                self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
-                metric.reset()
+            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+            metric.reset()
+
+    def test_step(self, batch, batch_idx):
+        for metric in self.test_metrics:
+            metric.update(batch, self.model)
+
+    def on_test_epoch_end(self) -> None:
+        for metric in self.test_metrics:
+            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+            metric.reset()
 
     def predict_step(self, batch, batch_idx) -> dict[str, Distribution]:
         return self.model.local_distributions(batch)
