@@ -41,3 +41,7 @@ class AbstractVampPrior(Prior, ABC):
     @property
     def u(self) -> Tensor:
         return self._u_constraint(self._u)
+
+    def log_pz_c(self, z: Tensor) -> Tensor:
+        pz_c = self._encoder(self.u)
+        return pz_c.log_prob(z[:, None])

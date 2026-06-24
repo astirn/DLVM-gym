@@ -1,5 +1,5 @@
 import torch
-from torch.distributions import Distribution, MultivariateNormal, kl_divergence
+import torch.distributions as dist
 
 from .abstract import Prior
 
@@ -11,10 +11,10 @@ class StandardNormalPrior(Prior):
         self.register_buffer("scale_tril", torch.eye(dim_z))
 
     @property
-    def pz(self) -> Distribution:
-        return MultivariateNormal(
+    def pz(self) -> dist.Distribution:
+        return dist.MultivariateNormal(
             loc=self.get_buffer("loc"), scale_tril=self.get_buffer("scale_tril")
         )
 
-    def dkl(self, qz_x: MultivariateNormal) -> torch.Tensor:
-        return kl_divergence(qz_x, self.pz).mean()
+    def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
+        return dist.kl_divergence(qz_x, self.pz).mean()
