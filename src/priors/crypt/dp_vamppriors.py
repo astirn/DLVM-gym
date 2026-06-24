@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import Tensor
 from torch.distributions import (
@@ -5,7 +7,7 @@ from torch.distributions import (
     Categorical,
     Distribution,
     Gamma,
-    MultivariateNormal,
+    MixtureSameFamily,
     kl_divergence,
 )
 
@@ -131,6 +133,20 @@ class DirichletProcessVampPrior(AbstractVampPrior):
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
         return qc_z
+
+    @property
+    def pz(self) -> Distribution:
+        if self.concentration is None:
+            raise NotImplementedError(
+                "Exact log p(z) requires integrating alpha_0 ~ Gamma(a, b) over "
+                "the stick-breaking weights, which has no closed form."
+            )
+        log_a = math.log(self.concentration)
+        log_1pa = math.log(1 + self.concentration)
+        j = torch.arange(self.k, device=self.u.device, dtype=torch.float)
+        log_probs = j * (log_a - log_1pa) - log_1pa
+        log_probs[-1] += log_1pa  # last component: pi_K has no 1/(1+alpha0) factor
+        return MixtureSameFamily(Categorical(logits=log_probs), self.pz_c)
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):
