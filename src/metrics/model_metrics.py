@@ -16,16 +16,15 @@ class ModelMetrics(Metric):
         self, batch: dict[str, torch.Tensor], model: DeepLatentVariableModel
     ) -> None:
         k = 1_000
-        x = batch["x"]
-        qz = model.qz(x=x)
+        qz = model.qz(**batch)
         z = qz.rsample((k,))
         log_pz = model.prior.pz.log_prob(z)
         log_qz = qz.log_prob(z)
-        log_pxz = model.px(z=z).log_prob(x)
+        log_pxz = model.px(z=z, **batch).log_prob(batch["x"])
         log_w = log_pxz + log_pz - log_qz
         log_px = (torch.logsumexp(log_w, dim=0) - log(k)).sum()
         self.log_marginal += log_px
-        self.num_samples += x.shape[0]
+        self.num_samples += batch["x"].shape[0]
 
     def compute(self) -> dict[str, torch.Tensor]:
         num_samples = getattr(self, "num_samples")
