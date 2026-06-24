@@ -25,10 +25,10 @@ class VampPrior(AbstractVampPrior):
         )
 
     def component_scores(self, z: torch.Tensor) -> torch.Tensor:
-        return self.pz_c.log_prob(z[:, None]).softmax(dim=-1)
+        return self.log_pz_c(z).softmax(dim=-1)
 
     def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
-        log_pz_c = self.pz_c.log_prob(qz_x.rsample()[:, None])
+        log_pz_c = self.log_pz_c(qz_x.rsample())
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
 
