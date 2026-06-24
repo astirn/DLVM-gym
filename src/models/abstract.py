@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from torch import Tensor
+from torch.distributions import Distribution, MultivariateNormal
 from torch.nn import Module
 
 from src.priors import Prior
