@@ -24,8 +24,8 @@ class VampPrior(AbstractVampPrior):
             self.pz_c,
         )
 
-    def qc(self, z: torch.Tensor) -> dist.Categorical:
-        return dist.Categorical(logits=self.pz_c.log_prob(z[:, None]))
+    def component_scores(self, z: torch.Tensor) -> torch.Tensor:
+        return self.pz_c.log_prob(z[:, None]).softmax(dim=-1)
 
     def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
         log_pz_c = self.pz_c.log_prob(qz_x.rsample()[:, None])

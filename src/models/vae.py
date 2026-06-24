@@ -24,19 +24,15 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
         self.prior: Prior = instantiate(prior_params, encoder=self.encoder, **kwargs)
 
-    def qz(self, x: Tensor) -> MultivariateNormal:
+    def qz(self, *, x: Tensor, **kwargs) -> MultivariateNormal:
         return self.encoder(x)
 
-    def px(self, z: Tensor) -> Distribution:
+    def px(self, *, z: Tensor, **kwargs) -> Distribution:
         return self.decoder(z)
 
-    def local_distributions(self, batch: dict[str, Tensor]) -> dict[str, Distribution]:
-        qz_x = self.qz(batch["x"])
-        z = qz_x.rsample()
-        px_z = self.px(z)
-        return {**{"qz_x": qz_x, "px_z": px_z}, **self.prior.local_distributions(qz_x)}
-
     def loss(self, batch: dict[str, Tensor]) -> Tensor:
-        qz_x, px_z = tuple(self.local_distributions(batch).values())[:2]
-        elbo = px_z.log_prob(batch["x"]).mean() - self.prior.dkl(qz_x)
+        x = batch["x"]
+        qz_x = self.qz(x=x)
+        px_z = self.px(z=qz_x.rsample())
+        elbo = px_z.log_prob(x).mean() - self.prior.dkl(qz_x)
         return -elbo
