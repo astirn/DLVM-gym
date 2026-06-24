@@ -3,8 +3,7 @@ from typing import Any
 
 from hydra.utils import instantiate
 from lightning import LightningModule
-from torch import Tensor, nn
-from torch.distributions import Distribution
+from torch import Tensor
 from torchmetrics import Metric
 
 from src.models.abstract import DeepLatentVariableModel
@@ -58,8 +57,23 @@ class ModelWrapper(LightningModule, ABC):
             self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
             metric.reset()
 
-    def predict_step(self, batch, batch_idx) -> dict[str, Distribution]:
-        return self.model.local_distributions(batch)
+    def predict_step(self, batch, batch_idx) -> dict[str, Any]:
+        qz = self.model.qz(**batch)
+        z = qz.sample()
+        px = self.model.px(z=z, **batch)
+        predictions = {
+            "qz": qz,
+            "px": px,
+        }
+
+        try:
+            predictions["component_distribution"] = (
+                self.model.prior.component_distribution(z=z)
+            )
+        except NotImplementedError:
+            pass
+
+        return predictions
 
     def configure_optimizers(self):
 

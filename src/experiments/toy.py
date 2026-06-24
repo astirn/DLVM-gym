@@ -76,7 +76,7 @@ def plot_results(
 
     distributions = trainer.predict(model, datamodule.predict_dataloader())
     distributions = merge_with(concat_distributions, distributions)
-    cluster_assignments = distributions["qc_z"].probs.argmax(axis=1)
+    cluster_assignments = distributions["component_distribution"].probs.argmax(axis=1)
 
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)

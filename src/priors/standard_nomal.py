@@ -16,8 +16,8 @@ class StandardNormalPrior(Prior):
             loc=self.get_buffer("loc"), scale_tril=self.get_buffer("scale_tril")
         )
 
-    def component_scores(self, z: torch.Tensor) -> torch.Tensor:
-        return torch.ones_like(z[:, :1])
+    def component_distribution(self, z: torch.Tensor) -> dist.Categorical:
+        return dist.Categorical(probs=torch.ones_like(z[:, :1]))
 
     def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
         return dist.kl_divergence(qz_x, self.pz).mean()

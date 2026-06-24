@@ -126,11 +126,11 @@ class DirichletProcessVampPrior(AbstractVampPrior):
         global_kl = self.dkl_kappa() + self.dkl_v(log_vm1)
         return local_kl.mean() + global_kl / self.num_data
 
-    def component_scores(self, z: Tensor) -> Tensor:
+    def component_distribution(self, z: Tensor) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
-        return qc_z.probs
+        return qc_z
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):

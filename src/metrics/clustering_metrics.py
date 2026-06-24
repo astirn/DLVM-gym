@@ -22,9 +22,9 @@ class ClusteringMetrics(Metric):
         if self.label_key in batch:
             labels = batch[self.label_key]
             qz = model.qz(**batch)
-            cluster_probs = model.prior.component_scores(z=qz.sample())
-            cluster_assignments = torch.argmax(cluster_probs, dim=1)
-            cluster_labels = labels[torch.argmax(cluster_probs, dim=0)]
+            component_dist = model.prior.component_distribution(z=qz.sample())
+            cluster_assignments = torch.argmax(component_dist.probs, dim=1)
+            cluster_labels = labels[torch.argmax(component_dist.probs, dim=0)]
             self.assignments += F.one_hot(
                 cluster_assignments, len(self.assignments)
             ).sum(dim=0)
