@@ -8,8 +8,11 @@ from torch.nn import Module
 class Prior(Module, ABC):
 
     @property
-    @abstractmethod
-    def pz(self) -> Distribution: ...
+    def pz(self) -> Distribution:
+        raise NotImplementedError  # optionally required for some metrics
 
-    @abstractmethod
+    def component_scores(self, z: Tensor) -> Tensor:
+        raise NotImplementedError  # optionally required for some metrics
+
+    @abstractmethod  # required for model training
     def dkl(self, qz_x: Distribution) -> Tensor: ...

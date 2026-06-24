@@ -1,15 +1,15 @@
 import torch
-import torch.distributions as dist
 import torch.nn.functional as F
 from sklearn.metrics.cluster import normalized_mutual_info_score
 from torchmetrics import Metric
 
+from src.models.abstract import DeepLatentVariableModel
+
 
 class ClusteringMetrics(Metric):
-    def __init__(self, label_key: str, props_key: str):
+    def __init__(self, label_key: str):
         super().__init__()
         self.label_key = label_key
-        self.props_key = props_key
         self.add_state("assignments", default=torch.zeros(2048))
         self.add_state("accuracy", default=torch.tensor(0.0))
         self.add_state("nmi", default=torch.tensor(0.0))
@@ -17,26 +17,23 @@ class ClusteringMetrics(Metric):
         self.add_state("num_samples", default=torch.tensor(0.0))
 
     def update(
-        self,
-        batch: dict[str, torch.Tensor],
-        distributions: dict[str, dist.Distribution],
+        self, batch: dict[str, torch.Tensor], model: DeepLatentVariableModel
     ) -> None:
-        if self.label_key in batch and self.props_key in distributions:
+        if self.label_key in batch:
             labels = batch[self.label_key]
-            qc = distributions[self.props_key]
-            if isinstance(qc, dist.Categorical):
-                cluster_probs = qc.probs
-                cluster_assignments = torch.argmax(cluster_probs, dim=1)
-                cluster_labels = labels[torch.argmax(cluster_probs, dim=0)]
-                self.assignments += F.one_hot(
-                    cluster_assignments, len(self.assignments)
-                ).sum(dim=0)
-                self.accuracy += (labels == cluster_labels[cluster_assignments]).sum()
-                self.nmi += normalized_mutual_info_score(
-                    labels.cpu(), cluster_assignments.cpu()
-                )
-                self.num_batches += 1
-                self.num_samples += labels.shape[0]
+            qz = model.qz(**batch)
+            cluster_probs = model.prior.component_scores(z=qz.sample())
+            cluster_assignments = torch.argmax(cluster_probs, dim=1)
+            cluster_labels = labels[torch.argmax(cluster_probs, dim=0)]
+            self.assignments += F.one_hot(
+                cluster_assignments, len(self.assignments)
+            ).sum(dim=0)
+            self.accuracy += (labels == cluster_labels[cluster_assignments]).sum()
+            self.nmi += normalized_mutual_info_score(
+                labels.cpu(), cluster_assignments.cpu()
+            )
+            self.num_batches += 1
+            self.num_samples += labels.shape[0]
 
     def compute(self) -> dict[str, torch.Tensor]:
         return {
