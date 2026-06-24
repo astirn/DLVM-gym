@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -38,25 +38,19 @@ class scVI(DeepLatentVariableModel):
         s = u[:, self.num_genes :]
         return torch.concat([F.softplus(x), F.softmax(s, dim=-1)], dim=1)
 
-    def qz(self, x: Tensor, s: Tensor) -> MultivariateNormal:
+    def qz(self, *, x: Tensor, s: Tensor, **kwargs) -> MultivariateNormal:
+        s = F.one_hot(s, num_classes=self.num_batches).float()
         xs = torch.concat([x, s], dim=1)
         return self.encoder(xs)
 
-    def px(self, z: Tensor, s: Tensor, l: Tensor) -> Distribution:
+    def px(self, *, z: Tensor, s: Tensor, l: Tensor, **kwargs) -> Distribution:
+        s = F.one_hot(s, num_classes=self.num_batches).float()
         zs = torch.concat([z, s], dim=1)
         return self.decoder(zs, l)
 
-    def local_distributions(self, batch: dict[str, Tensor]) -> dict[str, Distribution]:
-        s = F.one_hot(batch["s"], num_classes=self.num_batches).float()
-        qz_xs = self.qz(batch["x"].log1p(), s)
-        z = qz_xs.rsample()
-        px_zs = self.px(z, s, batch["x"].sum(dim=1, keepdim=True))
-        return {
-            **{"qz_xs": qz_xs, "px_zs": px_zs},
-            **self.prior.local_distributions(qz_xs),
-        }
-
     def loss(self, batch: dict[str, Tensor]) -> Tensor:
-        qz_xs, px_zs = tuple(self.local_distributions(batch).values())[:2]
-        elbo = px_zs.log_prob(batch["x"]).mean() - self.prior.dkl(qz_xs)
+        x, s, l = batch["x"], batch["s"], batch["l"]
+        qz_xs = self.qz(x=x, s=s)
+        px_zsl = self.px(z=qz_xs.rsample(), s=s, l=l)
+        elbo = px_zsl.log_prob(x).mean() - self.prior.dkl(qz_xs)
         return -elbo

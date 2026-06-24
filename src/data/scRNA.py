@@ -36,6 +36,7 @@ class scRNADataset(Dataset):
 def collate(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
     return {
         "x": torch.vstack([b["x"] for b in batch]),
+        "l": torch.hstack([b["x"].sum(dim=1) for b in batch]),
         "c": torch.hstack([b["c"] for b in batch]),
         "s": torch.hstack([b["s"] for b in batch]),
     }

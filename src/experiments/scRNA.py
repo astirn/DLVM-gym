@@ -96,7 +96,7 @@ class Decoder(nn.Module):
 
     def forward(self, zs: torch.Tensor, library_size: torch.Tensor):
         out = self.net(zs)
-        mu = self.fw(out) * library_size
+        mu = self.fw(out) * library_size.unsqueeze(1)
         theta = self.log_theta.exp()
         if self.gene_likelihood == "nb":
             return NegativeBinomial(mu, theta)
@@ -172,7 +172,7 @@ def analyis(
 
     distributions = trainer.predict(model, datamodule.predict_dataloader())
     distributions = merge_with(concat_distributions, distributions)
-    z = distributions["qz_xs"].sample()
+    z = distributions["qz"].sample()
     adata = datamodule.adata
     adata.obsm[embedding_key] = z.cpu().numpy(force=True)
     df = scib_metrics(adata, [embedding_key])
