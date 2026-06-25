@@ -33,6 +33,7 @@ class VariationalAutoencoder(DeepLatentVariableModel):
     def loss(self, batch: dict[str, Tensor]) -> Tensor:
         x = batch["x"]
         qz_x = self.qz(x=x)
-        px_z = self.px(z=qz_x.rsample())
-        elbo = px_z.log_prob(x).mean() - self.prior.dkl(qz_x)
+        z_sample = qz_x.rsample()
+        px_z = self.px(z=z_sample)
+        elbo = px_z.log_prob(x).mean() - self.prior.dkl(qz_x, z_sample)
         return -elbo

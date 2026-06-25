@@ -51,6 +51,7 @@ class scVI(DeepLatentVariableModel):
     def loss(self, batch: dict[str, Tensor]) -> Tensor:
         x, s, l = batch["x"], batch["s"], batch["l"]
         qz_xs = self.qz(x=x, s=s)
-        px_zsl = self.px(z=qz_xs.rsample(), s=s, l=l)
-        elbo = px_zsl.log_prob(x).mean() - self.prior.dkl(qz_xs)
+        z_sample = qz_xs.rsample()
+        px_zsl = self.px(z=z_sample, s=s, l=l)
+        elbo = px_zsl.log_prob(x).mean() - self.prior.dkl(qz_xs, z_sample)
         return -elbo

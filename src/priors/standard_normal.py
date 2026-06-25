@@ -19,5 +19,5 @@ class StandardNormalPrior(Prior):
     def component_distribution(self, z: torch.Tensor) -> dist.Categorical:
         return dist.Categorical(probs=torch.ones_like(z[:, :1]))
 
-    def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
+    def dkl(self, qz_x: dist.Distribution, z_sample: torch.Tensor) -> torch.Tensor:
         return dist.kl_divergence(qz_x, self.pz).mean()

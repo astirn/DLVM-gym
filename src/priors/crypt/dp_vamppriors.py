@@ -119,9 +119,8 @@ class DirichletProcessVampPrior(AbstractVampPrior):
             pv = Beta(1, self.concentration)
             return kl_divergence(qv, pv)[:-1].sum()
 
-    def dkl(self, qz_x: Distribution) -> Tensor:
-        z = qz_x.rsample()
-        log_pz_c = self.log_pz_c(z)
+    def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor:
+        log_pz_c = self.log_pz_c(z_sample)
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
         local_kl = self.dkl_z(qz_x, qc_z, log_pz_c) + self.dkl_c(qc_z, log_v, log_vm1)

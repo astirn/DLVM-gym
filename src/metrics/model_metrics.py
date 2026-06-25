@@ -17,7 +17,7 @@ class ModelMetrics(Metric):
     ) -> None:
         k = 1_000
         qz = model.qz(**batch)
-        z = qz.rsample((k,))
+        z = qz.sample((k,))
         log_pz = model.prior.pz.log_prob(z)
         log_qz = qz.log_prob(z)
         log_pxz = model.px(z=z, **batch).log_prob(batch["x"])

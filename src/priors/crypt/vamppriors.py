@@ -27,8 +27,8 @@ class VampPrior(AbstractVampPrior):
     def component_distribution(self, z: torch.Tensor) -> dist.Categorical:
         return dist.Categorical(logits=self.log_pz_c(z))
 
-    def dkl(self, qz_x: dist.Distribution) -> torch.Tensor:
-        log_pz_c = self.log_pz_c(qz_x.rsample())
+    def dkl(self, qz_x: dist.Distribution, z_sample: torch.Tensor) -> torch.Tensor:
+        log_pz_c = self.log_pz_c(z_sample)
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
 
