@@ -8,7 +8,7 @@ defaults:
   - /trainer@trainer: step_based
   - _self_
 
-seed: 123
+seed: 1
 
 data:
   _target_: src.data.ClusteringDataModule
