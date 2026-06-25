@@ -47,13 +47,10 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
-@hydra.main(
-    version_base=None,
-    config_path="../../conf",
-    config_name="experiments/clustering/mnist",
-)
+@hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    train(cfg)
+    datamodule, model, trainer = train(cfg)
+    trainer.test(model, datamodule.test_dataloader())
 
 
 if __name__ == "__main__":
