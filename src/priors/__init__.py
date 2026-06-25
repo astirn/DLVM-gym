@@ -1,4 +1,4 @@
 from .abstract import Prior
-from .standard_nomal import StandardNormalPrior
+from .standard_normal import StandardNormalPrior
 
 __all__ = ["Prior", "StandardNormalPrior"]
