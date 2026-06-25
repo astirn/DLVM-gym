@@ -12,11 +12,11 @@ class Encoder(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 2000),
-            nn.ReLU(),
+            nn.ELU(),
         )
         self.mu = nn.Linear(2000, dim_z)
         self.log_sigma = nn.Linear(2000, dim_z)
@@ -33,11 +33,11 @@ class Decoder(nn.Module):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(2000, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, dim_x),
         )
         self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
