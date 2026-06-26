@@ -4,6 +4,7 @@ from typing import Any
 from hydra.utils import instantiate
 from lightning import LightningModule
 from torch import Tensor
+from torch.nn import ModuleList
 from torchmetrics import Metric
 
 from src.models.abstract import DeepLatentVariableModel
