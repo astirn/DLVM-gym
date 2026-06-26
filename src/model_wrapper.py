@@ -21,8 +21,8 @@ class ModelWrapper(LightningModule, ABC):
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
-        self.validation_metrics = validation_metrics or []
-        self.test_metrics = test_metrics or []
+        self.validation_metrics = ModuleList(validation_metrics or [])
+        self.test_metrics = ModuleList(test_metrics or [])
         self.optimizer_params = optimizer_params
         self.scheduler_params = scheduler_params
 
@@ -41,21 +41,25 @@ class ModelWrapper(LightningModule, ABC):
             batch_size=batch["x"].shape[0],
         )
         for metric in self.validation_metrics:
-            metric.update(batch, self.model)
+            if isinstance(metric, Metric):
+                metric.update(batch, self.model)
 
     def on_validation_epoch_end(self) -> None:
         for metric in self.validation_metrics:
-            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
-            metric.reset()
+            if isinstance(metric, Metric):
+                self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
+                metric.reset()
 
     def test_step(self, batch, batch_idx):
         for metric in self.test_metrics:
-            metric.update(batch, self.model)
+            if isinstance(metric, Metric):
+                metric.update(batch, self.model)
 
     def on_test_epoch_end(self) -> None:
         for metric in self.test_metrics:
-            self.log_dict(metric.compute(), on_epoch=True, prog_bar=True)
-            metric.reset()
+            if isinstance(metric, Metric):
+                self.log_dict(metric.compute(), on_epoch=True)
+                metric.reset()
 
     def predict_step(self, batch, batch_idx) -> dict[str, Any]:
         qz = self.model.qz(**batch)
