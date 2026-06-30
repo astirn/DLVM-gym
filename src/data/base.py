@@ -122,3 +122,6 @@ class BaseDataModule(LightningDataModule, ABC):
             drop_last=False,
             **self._dl_kwargs(split="predict"),
         )
+
+    def full_dataloader(self) -> DataLoader:
+        raise NotImplementedError("Full dataloader not implemented")

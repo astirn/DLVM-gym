@@ -51,6 +51,8 @@ class Decoder(nn.Module):
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = train(cfg)
     trainer.test(model, datamodule.test_dataloader())
+    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    trainer.test(model, datamodule.full_dataloader())
 
 
 if __name__ == "__main__":

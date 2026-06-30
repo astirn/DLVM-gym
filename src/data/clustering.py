@@ -2,6 +2,7 @@ from math import prod
 
 import torch
 from toolz import merge_with
+from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
@@ -68,3 +69,15 @@ class ClusteringDataModule(BaseDataModule):
             self.data["predict"] = getattr(datasets, self.dataset)(
                 root=self.root, train=False, transform=ToTensor()
             )
+
+    def full_dataloader(self) -> DataLoader:
+        return DataLoader(
+            ConcatDataset(
+                [
+                    self.train_dataloader().dataset,
+                    self.val_dataloader().dataset,
+                ]
+            ),
+            shuffle=False,
+            **self._dl_kwargs(split="val"),
+        )

@@ -163,27 +163,12 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     return datamodule, model, trainer
 
 
-def analyis(
-    cfg: DictConfig, datamodule: scRNADataModule, model: ModelWrapper, trainer: Trainer
-) -> None:
-    model_name = cfg.model["_target_"].split(".")[-1]
-    prior_name = cfg.model.prior_params["_target_"].split(".")[-1]
-    embedding_key = f"{model_name} - {prior_name}"
-
-    distributions = trainer.predict(model, datamodule.predict_dataloader())
-    distributions = merge_with(concat_distributions, distributions)
-    z = distributions["qz"].sample()
-    adata = datamodule.adata
-    adata.obsm[embedding_key] = z.cpu().numpy(force=True)
-    df = scib_metrics(adata, [embedding_key])
-    with pd.option_context("display.max_colwidth", None, "display.width", None):
-        print(df)
-
-
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = train(cfg)
-    analyis(cfg, datamodule, model, trainer)
+    trainer.test(model, datamodule.test_dataloader())
+    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    trainer.test(model, datamodule.full_dataloader())
 
 
 if __name__ == "__main__":
