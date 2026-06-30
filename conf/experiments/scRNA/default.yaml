@@ -14,7 +14,11 @@ data:
   _target_: src.data.scRNA.scRNADataModule
   dataset: ???
   prepare_data_fn: ???
-  batch_size: 512
+  batch_size:
+    train: 128
+    val: 128
+    test: 8
+    predict: 128
   num_workers: 8
   pin_memory: true
   root: datasets/scRNA-seq

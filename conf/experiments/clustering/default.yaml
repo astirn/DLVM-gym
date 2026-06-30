@@ -13,7 +13,11 @@ seed: 1
 data:
   _target_: src.data.ClusteringDataModule
   dataset: ???
-  batch_size: 512
+  batch_size:
+    train: 512
+    val: 512
+    test: 8
+    predict: 512
   num_workers: 8
   pin_memory: true
   root: datasets/clustering
