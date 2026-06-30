@@ -33,12 +33,15 @@ class VariationalAutoencoder(DeepLatentVariableModel):
             decoder_params, dim_x=self.dim_x, **kwargs
         )
 
-        u_initial = sample_u_initial(
-            datamodule,
-            k=prior_params["k"],
-            u_keys="x",
-            stratification_key="c" if stratified_u_initial else None,
-        )["x"]
+        if "crypt" in prior_params["_target_"]:
+            u_initial = sample_u_initial(
+                datamodule,
+                k=prior_params["k"],
+                u_keys="x",
+                stratification_key="c" if stratified_u_initial else None,
+            )["x"]
+        else:
+            u_initial = None
 
         self.prior: Prior = instantiate(
             prior_params,

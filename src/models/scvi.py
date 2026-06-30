@@ -40,19 +40,22 @@ class scVI(DeepLatentVariableModel):
             **kwargs,
         )
 
-        u_initial = sample_u_initial(
-            datamodule,
-            k=prior_params["k"],
-            u_keys=["x", "s"],
-            stratification_key="c" if stratified_u_initial else None,
-        )
-        u_initial = torch.concat(
-            [
-                u_initial["x"].log1p(),
-                F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
-            ],
-            dim=1,
-        )
+        if "crypt" in prior_params["_target_"]:
+            u_initial = sample_u_initial(
+                datamodule,
+                k=prior_params["k"],
+                u_keys=["x", "s"],
+                stratification_key="c" if stratified_u_initial else None,
+            )
+            u_initial = torch.concat(
+                [
+                    u_initial["x"].log1p(),
+                    F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
+                ],
+                dim=1,
+            )
+        else:
+            u_initial = None
 
         self.prior: Prior = instantiate(
             prior_params,
