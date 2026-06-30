@@ -5,7 +5,9 @@ from hydra.utils import instantiate
 from torch import Tensor
 from torch.distributions import Distribution, MultivariateNormal
 
+from src.data import ClusteringDataModule, GaussianMixtureDataModule
 from src.priors import Prior
+from src.priors.crypt.utils import sample_u_initial
 
 from .abstract import DeepLatentVariableModel
 
@@ -14,20 +16,38 @@ class VariationalAutoencoder(DeepLatentVariableModel):
 
     def __init__(
         self,
+        datamodule: ClusteringDataModule | GaussianMixtureDataModule,
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
+        stratified_u_initial: bool = False,
         **kwargs,
     ):
         super().__init__()
-        self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
-        self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
+        self.dim_x = datamodule.dim
+        self.num_data = datamodule.num_data
+        self.encoder: torch.nn.Module = instantiate(
+            encoder_params, dim_x=self.dim_x, **kwargs
+        )
+        self.decoder: torch.nn.Module = instantiate(
+            decoder_params, dim_x=self.dim_x, **kwargs
+        )
 
-        u_initial = kwargs.pop("u_initial")
-        if u_initial is not None:
-            u_initial = u_initial["x"]
+        u_initial: Tensor = sample_u_initial(
+            datamodule,
+            k=prior_params["k"],
+            u_keys="x",
+            stratification_key="c" if stratified_u_initial else None,
+        )["x"]
 
-        self.prior: Prior = instantiate(prior_params, encoder=self.encoder, **kwargs)
+        self.prior: Prior = instantiate(
+            prior_params,
+            dim_x=self.dim_x,
+            encoder=self.encoder,
+            num_data=self.num_data,
+            u_initial=u_initial,
+            **kwargs,
+        )
 
     def qz(self, *, x: Tensor, **kwargs) -> MultivariateNormal:
         return self.encoder(x)

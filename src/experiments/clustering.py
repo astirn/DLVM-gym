@@ -2,9 +2,12 @@ import hydra
 import torch
 import torch.distributions as dist
 import torch.nn as nn
+import torch.nn.functional as F
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from src.train import train
+from src.fit import fit
+from utils import softplus_inverse
 
 
 class Encoder(nn.Module):
@@ -49,7 +52,7 @@ class Decoder(nn.Module):
 
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    datamodule, model, trainer = train(cfg)
+    datamodule, model, trainer = fit(cfg)
     trainer.test(model, datamodule.test_dataloader())
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
     trainer.test(model, datamodule.full_dataloader())
