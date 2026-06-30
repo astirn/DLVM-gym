@@ -47,12 +47,12 @@ class scIBMetrics(Metric):
         embedding = torch.cat(self.embedding, dim=0)  # type: ignore[attr-defined]
         obs = pd.DataFrame(
             {
-                "batch": torch.cat(self.batch).cpu().numpy(),  # type: ignore[attr-defined]
-                "cell_type": torch.cat(self.cell_type).cpu().numpy(),  # type: ignore[attr-defined]
+                "batch": torch.cat(self.batch).numpy(force=True),  # type: ignore[attr-defined]
+                "cell_type": torch.cat(self.cell_type).numpy(force=True),  # type: ignore[attr-defined]
             }
         )
-        adata = AnnData(X=embedding.cpu().numpy(), obs=obs)
-        adata.obsm["embedding"] = embedding.cpu().numpy()
+        adata = AnnData(X=embedding.numpy(force=True), obs=obs)
+        adata.obsm["embedding"] = embedding.numpy(force=True)
 
         bm = Benchmarker(
             adata,
