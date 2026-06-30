@@ -1,0 +1,34 @@
+# @package _global_
+
+defaults:
+  - default
+  - _self_
+
+data:
+  dataset: lung_atlas
+  prepare_data_fn:
+    _target_: toolz.compose_left
+    _args_:
+      - _target_: src.data.utils.scread
+        _partial_: true
+        filename: "lung_atlas_preprocessed.h5ad"
+        backup_url: "https://figshare.com/ndownloader/files/52859312"
+      - _target_: src.data.utils.use_counts
+        _partial_: true
+
+model:
+  dim_z: 30
+
+  encoder_params:
+    _target_: src.experiments.scRNA.Encoder
+    dim_hidden: 128
+    num_layers: 2
+
+  decoder_params:
+    _target_: src.experiments.scRNA.Decoder
+    dim_hidden: 128
+    num_layers: 2
+    gene_likelihood: nb
+
+optimizer:
+  lr: 5e-4

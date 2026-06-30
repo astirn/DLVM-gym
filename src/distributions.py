@@ -22,7 +22,7 @@ class NegativeBinomial(dist.Distribution):
             - self.theta.lgamma()
             - (x + 1).lgamma()
         )
-        return log_prob.sum(dim=1)
+        return log_prob.sum(dim=-1)
 
 
 class ZeroInflatedNegativeBinomial(dist.Distribution):
@@ -57,7 +57,7 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
             - (x + 1).lgamma()
         )
         log_prob = torch.where(torch.le(x, 1e-8), zero_ll, non_zero_ll)
-        return log_prob.sum(dim=1)
+        return log_prob.sum(dim=-1)
 
 
 def concat_distributions(distributions: list[dist.Distribution]) -> dist.Distribution:

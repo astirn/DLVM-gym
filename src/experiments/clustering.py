@@ -2,9 +2,12 @@ import hydra
 import torch
 import torch.distributions as dist
 import torch.nn as nn
+import torch.nn.functional as F
+from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from src.train import train
+from src.fit import fit
+from utils import softplus_inverse
 
 
 class Encoder(nn.Module):
@@ -12,11 +15,11 @@ class Encoder(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim_x, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 2000),
-            nn.ReLU(),
+            nn.ELU(),
         )
         self.mu = nn.Linear(2000, dim_z)
         self.log_sigma = nn.Linear(2000, dim_z)
@@ -33,11 +36,11 @@ class Decoder(nn.Module):
         super().__init__()
         self.mu = nn.Sequential(
             nn.Linear(dim_z, 2000),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(2000, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, 500),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(500, dim_x),
         )
         self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
@@ -47,13 +50,12 @@ class Decoder(nn.Module):
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
-@hydra.main(
-    version_base=None,
-    config_path="../../conf",
-    config_name="experiments/clustering/mnist",
-)
+@hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    train(cfg)
+    datamodule, model, trainer = fit(cfg)
+    trainer.test(model, datamodule.test_dataloader())
+    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    trainer.test(model, datamodule.full_dataloader())
 
 
 if __name__ == "__main__":

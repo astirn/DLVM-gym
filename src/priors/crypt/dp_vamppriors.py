@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import Tensor
 from torch.distributions import (
@@ -5,14 +7,14 @@ from torch.distributions import (
     Categorical,
     Distribution,
     Gamma,
-    MultivariateNormal,
+    MixtureSameFamily,
     kl_divergence,
 )
 
-from .vamppriors import VampPrior, VampPriorUnchained
+from .vamppriors import AbstractVampPrior, VampPriorUnchained
 
 
-class DirichletProcessVampPrior(VampPrior):
+class DirichletProcessVampPrior(AbstractVampPrior):
 
     def __init__(
         self,
@@ -117,21 +119,33 @@ class DirichletProcessVampPrior(VampPrior):
             pv = Beta(1, self.concentration)
             return kl_divergence(qv, pv)[:-1].sum()
 
-    def dkl(self, qz_x: Distribution) -> Tensor:
-        z = qz_x.rsample()
-        log_pz_c = self.log_pz_c(z)
+    def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor:
+        log_pz_c = self.log_pz_c(z_sample)
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
         local_kl = self.dkl_z(qz_x, qc_z, log_pz_c) + self.dkl_c(qc_z, log_v, log_vm1)
         global_kl = self.dkl_kappa() + self.dkl_v(log_vm1)
         return local_kl.mean() + global_kl / self.num_data
 
-    def local_distributions(self, qz_x: MultivariateNormal) -> dict[str, Distribution]:
-        z = qz_x.rsample()
+    def component_distribution(self, z: Tensor) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         log_v, log_vm1 = self.log_v_and_log_vm1()
         qc_z = self.qc(log_pz_c, log_v, log_vm1)
-        return {"qc_z": qc_z}
+        return qc_z
+
+    @property
+    def pz(self) -> Distribution:
+        if self.concentration is None:
+            raise NotImplementedError(
+                "Exact log p(z) requires integrating alpha_0 ~ Gamma(a, b) over "
+                "the stick-breaking weights, which has no closed form."
+            )
+        log_a = math.log(self.concentration)
+        log_1pa = math.log(1 + self.concentration)
+        j = torch.arange(self.k, device=self.u.device, dtype=torch.float)
+        log_probs = j * (log_a - log_1pa) - log_1pa
+        log_probs[-1] += log_1pa  # last component: pi_K has no 1/(1+alpha0) factor
+        return MixtureSameFamily(Categorical(logits=log_probs), self.pz_c)
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):

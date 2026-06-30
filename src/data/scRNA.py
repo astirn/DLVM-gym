@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 from anndata import AnnData
-from torch.utils.data import Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from .base import BaseDataModule
 
@@ -36,6 +36,7 @@ class scRNADataset(Dataset):
 def collate(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
     return {
         "x": torch.vstack([b["x"] for b in batch]),
+        "l": torch.hstack([b["x"].sum(dim=1) for b in batch]),
         "c": torch.hstack([b["c"] for b in batch]),
         "s": torch.hstack([b["s"] for b in batch]),
     }
@@ -164,3 +165,16 @@ class scRNADataModule(BaseDataModule):
                 self.batch_codes[predict_idx],
                 self.cell_type_codes[predict_idx],
             )
+
+    def full_dataloader(self) -> DataLoader:
+        return DataLoader(
+            ConcatDataset(
+                [
+                    self.train_dataloader().dataset,
+                    self.val_dataloader().dataset,
+                    self.test_dataloader().dataset,
+                ]
+            ),
+            shuffle=False,
+            **self._dl_kwargs(split="val"),
+        )

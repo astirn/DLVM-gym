@@ -1,23 +1,13 @@
 import hydra
-import lightning
-import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
 from hydra.utils import instantiate
-from lightning import Trainer
 from omegaconf import DictConfig
-from toolz import concat, merge_with, valmap
+from toolz import concat
 
-from src.data.scRNA import scRNADataModule
-from src.distributions import (
-    NegativeBinomial,
-    ZeroInflatedNegativeBinomial,
-    concat_distributions,
-)
-from src.metrics.scib_metrics import scib_metrics
-from src.model_wrapper import ModelWrapper
+from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+from src.fit import fit
 
 
 class Encoder(nn.Module):
@@ -90,13 +80,13 @@ class Decoder(nn.Module):
         self.log_theta = nn.Parameter(torch.zeros(num_genes))
         self.fw = nn.Sequential(
             nn.Linear(dims[-1], num_genes),
-            nn.Softmax(dim=1),
+            nn.Softmax(dim=-1),
         )
         self.fh = nn.Linear(dims[-1], num_genes)
 
     def forward(self, zs: torch.Tensor, library_size: torch.Tensor):
         out = self.net(zs)
-        mu = self.fw(out) * library_size
+        mu = self.fw(out) * library_size.unsqueeze(1)
         theta = self.log_theta.exp()
         if self.gene_likelihood == "nb":
             return NegativeBinomial(mu, theta)
@@ -107,83 +97,12 @@ class Decoder(nn.Module):
             raise NotImplementedError
 
 
-def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
-    if cfg.get("seed"):
-        lightning.seed_everything(cfg.seed, workers=True)
-
-    datamodule: scRNADataModule = instantiate(cfg.data)
-    datamodule.prepare_data()
-    datamodule.setup()
-
-    train_iter = iter(datamodule.train_dataloader())
-    x_samples = []
-    s_samples = []
-    c_samples = []
-    num_samples = 0
-    while num_samples < 100:
-        batch = next(train_iter)
-        x_samples.append(batch["x"])
-        s_samples.append(batch["s"])
-        c_samples.append(batch["c"])
-        num_samples += batch["x"].shape[0]
-
-    x_samples = torch.vstack(x_samples)[:100]
-    s_samples = torch.hstack(s_samples)[:100]
-    c_samples = torch.hstack(c_samples)[:100]
-
-    u_initial = torch.concat(
-        [
-            x_samples.log1p(),
-            F.one_hot(s_samples, num_classes=len(datamodule.batch_keys)).float(),
-        ],
-        dim=1,
-    )
-
-    model = ModelWrapper(
-        model=instantiate(
-            cfg.model,
-            num_batches=len(datamodule.batch_keys),
-            num_data=datamodule.num_cells,
-            num_genes=datamodule.num_genes,
-            u_initial=u_initial,
-        ),
-        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
-        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
-        optimizer_params=dict(cfg.optimizer),
-        scheduler_params=(
-            dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
-        ),
-    )
-
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
-
-    trainer.fit(model=model, datamodule=datamodule)
-
-    return datamodule, model, trainer
-
-
-def analyis(
-    cfg: DictConfig, datamodule: scRNADataModule, model: ModelWrapper, trainer: Trainer
-) -> None:
-    model_name = cfg.model["_target_"].split(".")[-1]
-    prior_name = cfg.model.prior_params["_target_"].split(".")[-1]
-    embedding_key = f"{model_name} - {prior_name}"
-
-    distributions = trainer.predict(model, datamodule.predict_dataloader())
-    distributions = merge_with(concat_distributions, distributions)
-    z = distributions["qz_xs"].sample()
-    adata = datamodule.adata
-    adata.obsm[embedding_key] = z.cpu().numpy(force=True)
-    df = scib_metrics(adata, [embedding_key])
-    with pd.option_context("display.max_colwidth", None, "display.width", None):
-        print(df)
-
-
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    datamodule, model, trainer = train(cfg)
-    analyis(cfg, datamodule, model, trainer)
+    datamodule, model, trainer = fit(cfg)
+    trainer.test(model, datamodule.test_dataloader())
+    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    trainer.test(model, datamodule.full_dataloader())
 
 
 if __name__ == "__main__":
