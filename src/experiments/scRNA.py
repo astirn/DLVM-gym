@@ -1,23 +1,17 @@
 import hydra
-import lightning
-import pandas as pd
 import torch
 import torch.distributions as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from hydra.utils import instantiate
-from lightning import Trainer
+from lightning import Trainer, seed_everything
 from omegaconf import DictConfig
-from toolz import concat, merge_with, valmap
+from toolz import concat, valmap
 
 from src.data.scRNA import scRNADataModule
-from src.distributions import (
-    NegativeBinomial,
-    ZeroInflatedNegativeBinomial,
-    concat_distributions,
-)
-from src.metrics.scib_metrics import scib_metrics
+from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
 from src.model_wrapper import ModelWrapper
+from src.priors.crypt.utils import sample_u_initial
 
 
 class Encoder(nn.Module):
@@ -90,7 +84,7 @@ class Decoder(nn.Module):
         self.log_theta = nn.Parameter(torch.zeros(num_genes))
         self.fw = nn.Sequential(
             nn.Linear(dims[-1], num_genes),
-            nn.Softmax(dim=1),
+            nn.Softmax(dim=-1),
         )
         self.fh = nn.Linear(dims[-1], num_genes)
 
@@ -109,32 +103,22 @@ class Decoder(nn.Module):
 
 def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
-        lightning.seed_everything(cfg.seed, workers=True)
+        seed_everything(cfg.seed, workers=True)
 
     datamodule: scRNADataModule = instantiate(cfg.data)
     datamodule.prepare_data()
     datamodule.setup()
 
-    train_iter = iter(datamodule.train_dataloader())
-    x_samples = []
-    s_samples = []
-    c_samples = []
-    num_samples = 0
-    while num_samples < 100:
-        batch = next(train_iter)
-        x_samples.append(batch["x"])
-        s_samples.append(batch["s"])
-        c_samples.append(batch["c"])
-        num_samples += batch["x"].shape[0]
-
-    x_samples = torch.vstack(x_samples)[:100]
-    s_samples = torch.hstack(s_samples)[:100]
-    c_samples = torch.hstack(c_samples)[:100]
-
+    u_initial = sample_u_initial(
+        datamodule,
+        k=cfg.model.prior_params.k,
+        u_keys=["x", "s"],
+        stratification_key="c",
+    )
     u_initial = torch.concat(
         [
-            x_samples.log1p(),
-            F.one_hot(s_samples, num_classes=len(datamodule.batch_keys)).float(),
+            u_initial["x"].log1p(),
+            F.one_hot(u_initial["s"], num_classes=len(datamodule.batch_keys)).float(),
         ],
         dim=1,
     )
