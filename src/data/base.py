@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
@@ -6,6 +8,17 @@ from typing import Any
 import torch
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
+
+log = logging.getLogger(__name__)
+
+
+def _debugger_active() -> bool:
+    return (
+        sys.gettrace() is not None
+        or "debugpy" in sys.modules
+        or "pydevd" in sys.modules
+        or any("debugpy" in arg for arg in sys.argv)
+    )
 
 
 def worker_init_fn(worker_id: int):
@@ -72,6 +85,12 @@ class BaseDataModule(LightningDataModule, ABC):
             if isinstance(self.num_workers, int)
             else self.num_workers[split]
         )
+        if num_workers > 0 and _debugger_active():
+            log.warning(
+                "Debugger detected: setting num_workers=0 to avoid fork/trace-hook "
+                "incompatibility with debugpy."
+            )
+            num_workers = 0
         out = {
             "batch_size": self.batch_size_per_device[split],
             "num_workers": num_workers,
