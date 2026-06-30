@@ -33,7 +33,7 @@ class VariationalAutoencoder(DeepLatentVariableModel):
             decoder_params, dim_x=self.dim_x, **kwargs
         )
 
-        u_initial: Tensor = sample_u_initial(
+        u_initial = sample_u_initial(
             datamodule,
             k=prior_params["k"],
             u_keys="x",

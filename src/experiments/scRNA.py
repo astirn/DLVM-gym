@@ -2,16 +2,12 @@ import hydra
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
 from hydra.utils import instantiate
-from lightning import Trainer, seed_everything
 from omegaconf import DictConfig
-from toolz import concat, valmap
+from toolz import concat
 
-from src.data.scRNA import scRNADataModule
 from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
-from src.model_wrapper import ModelWrapper
-from src.priors.crypt.utils import sample_u_initial
+from src.fit import fit
 
 
 class Encoder(nn.Module):
@@ -101,48 +97,9 @@ class Decoder(nn.Module):
             raise NotImplementedError
 
 
-def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
-    if cfg.get("seed"):
-        seed_everything(cfg.seed, workers=True)
-
-    datamodule: scRNADataModule = instantiate(cfg.data)
-    datamodule.prepare_data()
-    datamodule.setup()
-
-    u_initial = sample_u_initial(
-        datamodule,
-        k=cfg.model.prior_params.k,
-        u_keys=["x", "s"],
-        stratification_key="c",
-    )
-
-    model = ModelWrapper(
-        model=instantiate(
-            cfg.model,
-            num_batches=len(datamodule.batch_keys),
-            num_data=datamodule.num_cells,
-            num_genes=datamodule.num_genes,
-            u_initial=u_initial,
-        ),
-        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
-        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
-        optimizer_params=dict(cfg.optimizer),
-        scheduler_params=(
-            dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
-        ),
-    )
-
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
-
-    trainer.fit(model=model, datamodule=datamodule)
-
-    return datamodule, model, trainer
-
-
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
-    datamodule, model, trainer = train(cfg)
+    datamodule, model, trainer = fit(cfg)
     trainer.test(model, datamodule.test_dataloader())
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
     trainer.test(model, datamodule.full_dataloader())

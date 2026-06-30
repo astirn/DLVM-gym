@@ -6,7 +6,9 @@ from hydra.utils import instantiate
 from torch import Tensor
 from torch.distributions import Distribution, MultivariateNormal
 
+from src.data import scRNADataModule
 from src.priors import Prior
+from src.priors.crypt.utils import sample_u_initial
 
 from .abstract import DeepLatentVariableModel
 
@@ -15,31 +17,48 @@ class scVI(DeepLatentVariableModel):
 
     def __init__(
         self,
+        datamodule: scRNADataModule,
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
+        stratified_u_initial: bool = False,
         **kwargs,
     ):
         super().__init__()
-        self.num_batches = kwargs["num_batches"]
-        self.num_genes = kwargs["num_genes"]
-        self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
-        self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
+        self.num_batches = len(datamodule.batch_keys)
+        self.num_genes = datamodule.num_genes
+        self.encoder: torch.nn.Module = instantiate(
+            encoder_params,
+            num_batches=self.num_batches,
+            num_genes=self.num_genes,
+            **kwargs,
+        )
+        self.decoder: torch.nn.Module = instantiate(
+            decoder_params,
+            num_batches=self.num_batches,
+            num_genes=self.num_genes,
+            **kwargs,
+        )
 
-        u_initial = kwargs.pop("u_initial")
-        if u_initial is not None:
-            u_initial = torch.concat(
-                [
-                    u_initial["x"].log1p(),
-                    F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
-                ],
-                dim=1,
-            )
+        u_initial = sample_u_initial(
+            datamodule,
+            k=prior_params["k"],
+            u_keys=["x", "s"],
+            stratification_key="c" if stratified_u_initial else None,
+        )
+        u_initial = torch.concat(
+            [
+                u_initial["x"].log1p(),
+                F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
+            ],
+            dim=1,
+        )
 
         self.prior: Prior = instantiate(
             prior_params,
-            dim_x=kwargs["num_genes"] + self.num_batches,
+            dim_x=self.num_genes + self.num_batches,
             encoder=self.encoder,
+            num_data=datamodule.num_cells,
             u_initial=u_initial,
             **kwargs,
         )
