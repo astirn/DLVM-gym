@@ -8,7 +8,7 @@ from src.data import BaseDataModule
 from src.model_wrapper import ModelWrapper
 
 
-def train(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
+def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     if cfg.get("seed"):
         lightning.seed_everything(cfg.seed, workers=True)
 
