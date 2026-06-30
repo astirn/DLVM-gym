@@ -115,13 +115,6 @@ def train(cfg: DictConfig) -> tuple[scRNADataModule, ModelWrapper, Trainer]:
         u_keys=["x", "s"],
         stratification_key="c",
     )
-    u_initial = torch.concat(
-        [
-            u_initial["x"].log1p(),
-            F.one_hot(u_initial["s"], num_classes=len(datamodule.batch_keys)).float(),
-        ],
-        dim=1,
-    )
 
     model = ModelWrapper(
         model=instantiate(

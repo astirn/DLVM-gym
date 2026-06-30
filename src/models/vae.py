@@ -22,6 +22,11 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         super().__init__()
         self.encoder: torch.nn.Module = instantiate(encoder_params, **kwargs)
         self.decoder: torch.nn.Module = instantiate(decoder_params, **kwargs)
+
+        u_initial = kwargs.pop("u_initial")
+        if u_initial is not None:
+            u_initial = u_initial["x"]
+
         self.prior: Prior = instantiate(prior_params, encoder=self.encoder, **kwargs)
 
     def qz(self, *, x: Tensor, **kwargs) -> MultivariateNormal:
