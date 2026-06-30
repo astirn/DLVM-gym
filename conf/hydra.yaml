@@ -1,3 +1,5 @@
+# @package hydra
+
 run:
   dir: logs/hydra/single/${now:%Y-%m-%d_%H-%M-%S}
 sweep:
