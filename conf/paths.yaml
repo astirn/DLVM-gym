@@ -1,0 +1,4 @@
+# @package paths
+
+log_dir: logs/${experiment_name}
+output_dir: ${hydra:runtime.output_dir}

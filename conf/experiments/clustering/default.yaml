@@ -5,9 +5,11 @@ defaults:
   - /priors@model.prior_params: crypt/dp_vampprior_unchained
   - /metrics@metrics: default
   - /hydra
+  - /paths
   - /trainer@trainer: step_based
   - _self_
 
+experiment_name: Clustering/${data.dataset}
 seed: 1
 
 data:
