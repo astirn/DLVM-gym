@@ -49,7 +49,7 @@ class scRNADataModule(BaseDataModule):
         dataset: str,
         prepare_data_fn: Callable[[str], AnnData],
         val_ratio: float = 0.1,
-        test_ratio: float = 0.0,
+        test_ratio: float = 0.1,
         seed: int | None = None,
         **kwargs,
     ) -> None:
