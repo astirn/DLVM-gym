@@ -20,6 +20,7 @@ class ModelWrapper(LightningModule, ABC):
         scheduler_params: dict[str, Any] | None = None,
         validation_metrics: list[Metric] | None = None,
         test_metrics: list[Metric] | None = None,
+        **kwargs,
     ) -> None:
         LightningModule.__init__(self)
         self.model = model
