@@ -61,6 +61,6 @@ optimizer:
 
 trainer:
   gradient_clip_val: 1.0
-  gradient_clip_algorithm: "norm"
+  gradient_clip_algorithm: norm
   max_steps: 20000
   val_check_interval: 100

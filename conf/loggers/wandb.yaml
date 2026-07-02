@@ -1,0 +1,10 @@
+wandb:
+  _target_: lightning.pytorch.loggers.wandb.WandbLogger
+  save_dir: ${paths.output_dir}
+  log_model: false
+  mode: disabled
+  entity: octo-ai
+  project: VampPrior-Unchained
+  group: ${experiment_name}
+  job_type: fit
+  tags: []

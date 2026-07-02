@@ -1,4 +1,4 @@
 defaults:
   - csv
   - tensorboard
-  # - wandb
+  - wandb

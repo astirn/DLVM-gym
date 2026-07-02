@@ -22,7 +22,7 @@ data:
 model:
   _target_: src.models.VariationalAutoencoder
   _recursive_: false
-  
+
   dim_z: 1
 
   encoder_params:
@@ -51,6 +51,6 @@ optimizer:
 
 trainer:
   gradient_clip_val: 1.0
-  gradient_clip_algorithm: "norm"
+  gradient_clip_algorithm: norm
   max_steps: 5000
   val_check_interval: 500
