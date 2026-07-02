@@ -25,8 +25,9 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
         ),
     )
 
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
+    callbacks = list(valmap(instantiate, cfg.get("callbacks", {})).values())
+    loggers = list(valmap(instantiate, cfg.get("loggers", {})).values())
+    trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=loggers)
 
     trainer.fit(model=model, datamodule=datamodule)
 
