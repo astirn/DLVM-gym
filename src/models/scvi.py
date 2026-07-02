@@ -68,7 +68,7 @@ class scVI(DeepLatentVariableModel):
 
     def qz(self, *, x: Tensor, s: Tensor, **kwargs) -> MultivariateNormal:
         s = F.one_hot(s, num_classes=self.num_batches).float()
-        xs = torch.concat([x, s], dim=-1)
+        xs = torch.concat([x.log1p(), s], dim=-1)
         return self.encoder(xs)
 
     def px(self, *, z: Tensor, s: Tensor, l: Tensor, **kwargs) -> Distribution:
