@@ -11,8 +11,8 @@ data:
     _args_:
       - _target_: src.data.utils.scread
         _partial_: true
-        filename: "lung_atlas_preprocessed.h5ad"
-        backup_url: "https://figshare.com/ndownloader/files/52859312"
+        filename: lung_atlas_preprocessed.h5ad
+        backup_url: https://figshare.com/ndownloader/files/52859312
       - _target_: src.data.utils.use_counts
         _partial_: true
 

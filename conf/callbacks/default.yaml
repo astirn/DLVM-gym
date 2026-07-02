@@ -1,8 +1,6 @@
 defaults:
-  - early_stopping
-  - model_checkpoint
+  - checkpoint_last
+  - checkpoint_loss
+  - checkpoint_nmi
   - step_based_progress_bar
   - _self_
-
-model_checkpoint:
-  dirpath: ${hydra:runtime.output_dir}/checkpoints

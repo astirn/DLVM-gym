@@ -1,0 +1,10 @@
+checkpoint_loss:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: ${paths.output_dir}/checkpoints
+  filename: best_val_loss
+  monitor: val/loss
+  mode: min
+  verbose: false
+  save_last: false
+  save_top_k: 1
+  save_on_train_epoch_end: null # None -> checkpointing after validation

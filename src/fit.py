@@ -15,18 +15,19 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     datamodule.prepare_data()
     datamodule.setup()
 
+    metrics = valmap(instantiate, cfg.get("metrics", {}))
     model = ModelWrapper(
         model=instantiate(cfg.model, datamodule=datamodule),
-        validation_metrics=list(map(instantiate, cfg.metrics.validation_metrics)),
-        test_metrics=list(map(instantiate, cfg.metrics.test_metrics)),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
         ),
+        **metrics,
     )
 
-    callbacks = list(valmap(instantiate, cfg.callbacks).values())
-    trainer = instantiate(cfg.trainer, callbacks=callbacks)
+    callbacks = list(valmap(instantiate, cfg.get("callbacks", {})).values())
+    loggers = list(valmap(instantiate, cfg.get("loggers", {})).values())
+    trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=loggers)
 
     trainer.fit(model=model, datamodule=datamodule)
 

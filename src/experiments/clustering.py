@@ -53,9 +53,17 @@ class Decoder(nn.Module):
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = fit(cfg)
-    trainer.test(model, datamodule.test_dataloader())
+
+    # Log marginal uses best validation loss checkpoint (i.e. best validation ELBO)
+    ckpt = cfg.callbacks.checkpoint_loss
+    ckpt_path = f"{ckpt.dirpath}/{ckpt.filename}.ckpt"
+    trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
+
+    # NMI on full dataset uses best validation NMI checkpoint
+    ckpt = cfg.callbacks.checkpoint_nmi
+    ckpt_path = f"{ckpt.dirpath}/{ckpt.filename}.ckpt"
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
-    trainer.test(model, datamodule.full_dataloader())
+    trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":

@@ -2,12 +2,14 @@
 
 defaults:
   - /callbacks@callbacks: default
+  - /loggers@loggers: default
   - /priors@model.prior_params: crypt/dp_vampprior_unchained
-  - /metrics@metrics: default
-  - /hydra@hydra: default
+  - /hydra
+  - /paths
   - /trainer@trainer: step_based
   - _self_
 
+experiment_name: Clustering/${data.dataset}
 seed: 1
 
 data:
@@ -59,6 +61,6 @@ optimizer:
 
 trainer:
   gradient_clip_val: 1.0
-  gradient_clip_algorithm: "norm"
+  gradient_clip_algorithm: norm
   max_steps: 20000
   val_check_interval: 100

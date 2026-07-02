@@ -2,12 +2,14 @@
 
 defaults:
   - /callbacks@callbacks: default
+  - /loggers@loggers: default
   - /priors@model.prior_params: crypt/dp_vampprior_unchained
-  - /metrics@metrics: default
-  - /hydra@hydra: default
+  - /hydra
+  - /paths
   - /trainer@trainer: step_based
   - _self_
 
+experiment_name: Toy
 seed: 123
 
 data:
@@ -20,7 +22,7 @@ data:
 model:
   _target_: src.models.VariationalAutoencoder
   _recursive_: false
-  
+
   dim_z: 1
 
   encoder_params:
@@ -49,6 +51,6 @@ optimizer:
 
 trainer:
   gradient_clip_val: 1.0
-  gradient_clip_algorithm: "norm"
+  gradient_clip_algorithm: norm
   max_steps: 5000
   val_check_interval: 500
