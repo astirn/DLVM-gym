@@ -1,0 +1,7 @@
+defaults:
+  - crypt/default@_here_
+  - _self_
+
+_target_: src.priors.crypt.DirichletVampPriorUnchained
+num_data: ???
+concentration: 1.0
