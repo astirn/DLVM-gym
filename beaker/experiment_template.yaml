@@ -8,24 +8,22 @@ tasks:
     command: [bash, -c]
     arguments:
       - |
-        pwd
+        echo -e "\n=== Project Directory ==="
+        cd /home/andrew.stirn/projects/VampPrior-Paradox
+        ls -la
 
-        # echo -e "\n=== Project Directory ==="
-        # cd /home/andrew.stirn/projects/spatial
-        # ls -la
-
-        # # Basic system info
-        # echo -e "\n=== System Info ==="
-        # echo "Host: $(hostname) | $(uname -sr)"
-        # echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l) | Memory: $(free -h | grep Mem | awk '{print $2}')"
+        # Basic system info
+        echo -e "\n=== System Info ==="
+        echo "Host: $(hostname) | $(uname -sr)"
+        echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l) | Memory: $(free -h | grep Mem | awk '{print $2}')"
 
         # # Run the training script
         # # bash scripts/get_predictions.sh
 
-    # datasets:
-    #   - mountPath: /home/andrew.stirn/projects/spatial
-    #     source:
-    #       hostPath: /home/andrew.stirn/projects/spatial
+    datasets:
+      - mountPath: /home/andrew.stirn/projects/VampPrior-Paradox
+        source:
+          hostPath: /home/andrew.stirn/projects/VampPrior-Paradox
 
     envVars:
       - name: WANDB_API_KEY
