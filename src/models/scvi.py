@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 import torch
 import torch.nn.functional as F
@@ -21,7 +21,8 @@ class scVI(DeepLatentVariableModel):
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
-        stratified_u_initial: bool = False,
+        kl_warmup_steps: int = 0,
+        u_initial_strategy: Literal["data", "stratified data", "random"] | None = None,
         **kwargs,
     ):
         super().__init__()
@@ -39,21 +40,29 @@ class scVI(DeepLatentVariableModel):
             num_genes=self.num_genes,
             **kwargs,
         )
+        self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:
-            u_initial = sample_u_initial(
-                datamodule,
-                k=prior_params["k"],
-                u_keys=["x", "s"],
-                stratification_key="c" if stratified_u_initial else None,
-            )
-            u_initial = torch.concat(
-                [
-                    u_initial["x"].log1p(),
-                    F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
-                ],
-                dim=1,
-            )
+            if u_initial_strategy in ["data", "stratified data"]:
+                u_initial = sample_u_initial(
+                    datamodule,
+                    k=prior_params["k"],
+                    u_keys=["x", "s"],
+                    stratification_key=(
+                        "c" if u_initial_strategy == "stratified data" else None
+                    ),
+                )
+                u_initial = torch.concat(
+                    [
+                        u_initial["x"].log1p(),
+                        F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
+                    ],
+                    dim=1,
+                )
+            else:
+                raise ValueError(
+                    f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
+                )
         else:
             u_initial = None
 
@@ -78,10 +87,16 @@ class scVI(DeepLatentVariableModel):
         zs = torch.concat([z, s], dim=-1)
         return self.decoder(zs, l)
 
-    def loss(self, batch: dict[str, Tensor]) -> Tensor:
+    def beta(self, global_step: int) -> float:
+        if self.kl_warmup_steps == 0:
+            return 1.0
+        return min(1.0, global_step / self.kl_warmup_steps)
+
+    def loss(self, batch: dict[str, Tensor], global_step: int) -> Tensor:
         x, s, l = batch["x"], batch["s"], batch["l"]
         qz_xs = self.qz(x=x, s=s)
         z_sample = qz_xs.rsample()
         px_zsl = self.px(z=z_sample, s=s, l=l)
-        elbo = px_zsl.log_prob(x).mean() - self.prior.dkl(qz_xs, z_sample)
+        beta = self.beta(global_step)
+        elbo = px_zsl.log_prob(x).mean() - beta * self.prior.dkl(qz_xs, z_sample)
         return -elbo

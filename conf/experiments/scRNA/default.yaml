@@ -42,7 +42,8 @@ model:
     dim_z: ${model.dim_z}
     concentration: 5.0
 
-  stratified_u_initial: true
+  u_initial_strategy: stratified data
+  kl_warmup_steps: 0
 
 metrics:
   validation_metrics:

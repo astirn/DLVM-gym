@@ -39,7 +39,8 @@ model:
   prior_params:
     dim_z: ${model.dim_z}
 
-  stratified_u_initial: false
+  u_initial_strategy: random
+  kl_warmup_steps: 0
 
 metrics:
   validation_metrics:
