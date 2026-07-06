@@ -56,7 +56,7 @@ class ModelWrapper(LightningModule, ABC):
         self._set_metrics("_validation_metrics", value)
 
     def validation_step(self, batch, batch_idx):
-        loss = self.model.loss(batch)
+        loss = self.model.loss(batch, global_step=self.global_step)
         self.log(
             "val/loss",
             loss,

@@ -8,10 +8,10 @@ from torch.distributions import (
     kl_divergence,
 )
 
-from .vamppriors import AbstractVampPrior, VampPriorUnchained
+from .vamppriors import VampPrior, VampPriorUnchained
 
 
-class DirichletVampPrior(AbstractVampPrior):
+class DirichletVampPrior(VampPrior):
 
     def __init__(self, *, concentration: float, num_data: int, **kwargs):
         super().__init__(**kwargs)

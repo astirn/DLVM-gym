@@ -11,10 +11,10 @@ from torch.distributions import (
     kl_divergence,
 )
 
-from .vamppriors import AbstractVampPrior, VampPriorUnchained
+from .vamppriors import VampPrior, VampPriorUnchained
 
 
-class DirichletProcessVampPrior(AbstractVampPrior):
+class DirichletProcessVampPrior(VampPrior):
 
     def __init__(
         self,

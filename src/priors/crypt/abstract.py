@@ -39,12 +39,12 @@ class AbstractVampPrior(Prior, ABC):
         self._u_constraint = u_constraint
 
     @property
-    @abstractmethod
-    def pz_c(self) -> MultivariateNormal: ...
-
-    @property
     def u(self) -> Tensor:
         return self._u_constraint(self._u)
+
+    @property
+    @abstractmethod
+    def pz_c(self) -> MultivariateNormal: ...
 
     def log_pz_c(self, z: Tensor) -> Tensor:
         return self.pz_c.log_prob(z[:, None])
