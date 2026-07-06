@@ -39,13 +39,13 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:
-            if u_initial_strategy in ["data", "stratified data"]:
+            if u_initial_strategy in ["data", "stratified_data"]:
                 u_initial = sample_u_initial(
                     datamodule,
                     k=prior_params["k"],
                     u_keys="x",
                     stratification_key=(
-                        "c" if u_initial_strategy == "stratified data" else None
+                        "c" if u_initial_strategy == "stratified_data" else None
                     ),
                 )["x"]
             elif u_initial_strategy == "random":

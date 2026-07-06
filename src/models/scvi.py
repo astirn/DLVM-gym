@@ -46,31 +46,36 @@ class scVI(DeepLatentVariableModel):
         self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:
-            if u_initial_strategy in ["data", "stratified data"]:
+            if u_initial_strategy in ["data", "stratified_data"]:
                 u_initial = sample_u_initial(
                     datamodule,
                     k=prior_params["k"],
                     u_keys=["x", "s"],
                     stratification_key=(
-                        "c" if u_initial_strategy == "stratified data" else None
+                        "c" if u_initial_strategy == "stratified_data" else None
                     ),
                 )
+                u_initial = torch.concat(
+                    [
+                        u_initial["x"].log1p(),
+                        F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
+                    ],
+                    dim=1,
+                )
             elif u_initial_strategy == "random":
-                u_initial = {
-                    "x": torch.randn(prior_params["k"], self.num_genes).expm1(),
-                    "s": torch.randn(prior_params["k"], self.num_batches),
-                }
+                u_initial = torch.concat(
+                    [
+                        torch.randn(prior_params["k"], self.num_genes),
+                        F.softmax(
+                            torch.randn(prior_params["k"], self.num_batches), dim=1
+                        ),
+                    ],
+                    dim=1,
+                )
             else:
                 raise ValueError(
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
                 )
-            u_initial = torch.concat(
-                [
-                    u_initial["x"].log1p(),
-                    F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
-                ],
-                dim=1,
-            )
         else:
             u_initial = None
 
