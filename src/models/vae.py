@@ -33,6 +33,9 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         self.decoder: torch.nn.Module = instantiate(
             decoder_params, dim_x=self.dim_x, **kwargs
         )
+
+        if kl_warmup_steps < 0:
+            raise ValueError("kl_warmup_steps must be non-negative")
         self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:

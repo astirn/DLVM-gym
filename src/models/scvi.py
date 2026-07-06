@@ -40,6 +40,9 @@ class scVI(DeepLatentVariableModel):
             num_genes=self.num_genes,
             **kwargs,
         )
+
+        if kl_warmup_steps < 0:
+            raise ValueError("kl_warmup_steps must be non-negative")
         self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:
