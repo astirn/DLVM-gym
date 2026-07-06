@@ -22,7 +22,7 @@ class scVI(DeepLatentVariableModel):
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
         kl_warmup_steps: int = 0,
-        u_initial_strategy: Literal["data", "stratified data", "random"] | None = None,
+        u_initial_strategy: Literal["data", "stratified_data", "random"] | None = None,
         **kwargs,
     ):
         super().__init__()

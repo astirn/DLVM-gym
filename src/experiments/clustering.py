@@ -2,12 +2,10 @@ import hydra
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from src.fit import fit
-from utils import softplus_inverse
 
 
 class Encoder(nn.Module):

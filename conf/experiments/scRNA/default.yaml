@@ -42,7 +42,7 @@ model:
     dim_z: ${model.dim_z}
     concentration: 5.0
 
-  u_initial_strategy: stratified data
+  u_initial_strategy: random
   kl_warmup_steps: 0
 
 metrics:
