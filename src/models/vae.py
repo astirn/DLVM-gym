@@ -49,7 +49,7 @@ class VariationalAutoencoder(DeepLatentVariableModel):
                     ),
                 )["x"]
             elif u_initial_strategy == "random":
-                u_initial = torch.randn((prior_params["k"], self.dim_x))
+                u_initial = torch.randn(prior_params["k"], self.dim_x)
             else:
                 raise ValueError(
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
