@@ -2,7 +2,6 @@ import hydra
 import torch
 import torch.distributions as dist
 import torch.nn as nn
-import wandb
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from toolz import concat
@@ -112,8 +111,6 @@ def main(cfg: DictConfig) -> None:
     ckpt_path = f"{ckpt.dirpath}/{ckpt.filename}.ckpt"
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
     trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
-
-    wandb.finish()
 
 
 if __name__ == "__main__":
