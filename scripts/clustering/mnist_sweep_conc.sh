@@ -7,6 +7,6 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     model.prior_params.concentration=$CONCENTRATION \
     model.u_initial_strategy=$U_INITIAL_STRATEGY \
     model.kl_warmup_steps=$KL_WARMUP_STEPS \
-    loggers.wandb.mode=disabled \
+    loggers.wandb.mode=online \
     loggers.wandb.job_type=sweep \
     seed=$SEED

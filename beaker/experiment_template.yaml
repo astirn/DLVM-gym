@@ -17,8 +17,8 @@ tasks:
         echo "Host: $(hostname) | $(uname -sr)"
         echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l) | Memory: $(free -h | grep Mem | awk '{print $2}')"
 
-        # # Run the training script
-        # # bash scripts/get_predictions.sh
+        # Run script
+        bash scripts/<script_name>.sh
 
     datasets:
       - mountPath: /home/andrew.stirn/projects/VampPrior-Paradox
