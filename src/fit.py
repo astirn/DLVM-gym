@@ -1,6 +1,6 @@
 from hydra.utils import instantiate
 from lightning import Trainer, seed_everything
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from toolz import valmap
 
 from src.data import BaseDataModule
@@ -28,6 +28,10 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     callbacks = list(valmap(instantiate, cfg.get("callbacks", {})).values())
     loggers = list(valmap(instantiate, cfg.get("loggers", {})).values())
     trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=loggers)
+
+    hyperparams = OmegaConf.to_container(cfg, resolve=True)
+    for logger in trainer.loggers:
+        logger.log_hyperparams(hyperparams)
 
     trainer.fit(model=model, datamodule=datamodule)
 
