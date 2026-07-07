@@ -4,6 +4,7 @@ U_INITIAL_STRATEGY="data,stratified_data,random"
 SEED="1,2,3,4,5"
 
 PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/clustering/mnist --multirun \
+    hydra.launcher.n_jobs=5 \
     model.prior_params.concentration=$CONCENTRATION \
     model.u_initial_strategy=$U_INITIAL_STRATEGY \
     model.kl_warmup_steps=$KL_WARMUP_STEPS \
