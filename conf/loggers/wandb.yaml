@@ -1,5 +1,6 @@
 wandb:
   _target_: lightning.pytorch.loggers.wandb.WandbLogger
+  name: null
   save_dir: ${paths.output_dir}
   log_model: false
   mode: disabled

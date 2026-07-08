@@ -3,5 +3,6 @@ defaults:
   - _self_
 
 _target_: src.priors.crypt.DirichletVampPriorUnchained
+name: DirichletVampPriorUnchained
 num_data: ???
 concentration: 1.0

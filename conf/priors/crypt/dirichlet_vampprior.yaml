@@ -3,5 +3,6 @@ defaults:
   - _self_
 
 _target_: src.priors.crypt.DirichletVampPrior
+name: DirichletVampPrior
 num_data: ???
 concentration: 1.0

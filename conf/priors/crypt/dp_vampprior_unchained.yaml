@@ -3,6 +3,7 @@ defaults:
   - _self_
 
 _target_: src.priors.crypt.DirichletProcessVampPriorUnchained
+name: DPVampPriorUnchained
 num_data: ???
 concentration: 1.0
 concentration_prior_params: null
