@@ -40,6 +40,7 @@ class Decoder(nn.Module):
             nn.Linear(500, 500),
             nn.ELU(),
             nn.Linear(500, dim_x),
+            nn.Tanh(),
         )
         self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
 
