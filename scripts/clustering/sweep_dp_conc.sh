@@ -8,7 +8,7 @@ parse_args "Sweep DP concentration hyperparameters for a clustering dataset." "$
 
 PRIOR="crypt/dp_vampprior,crypt/dp_vampprior_unchained"
 CONCENTRATION="0.1,0.5,1.0,2.0,5.0"
-KL_WARMUP_STEPS="0,1000,2500,5000,10000"
+KL_WARMUP_STEPS="0,1000,2500,5000"
 U_INITIAL_STRATEGY="data,stratified_data,random"
 SEED="1,2,3,4,5"
 
