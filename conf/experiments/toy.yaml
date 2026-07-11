@@ -37,7 +37,7 @@ model:
     dim_z: ${model.dim_z}
     concentration: 5.0
 
-  stratified_u_initial: false
+  u_initial_strategy: random
 
 metrics:
   validation_metrics:

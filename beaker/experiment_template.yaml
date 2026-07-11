@@ -1,0 +1,46 @@
+version: v2
+description: Experiment pipeline
+budget: ai1/octo.ai
+tasks:
+  - name: vampprior_unchained
+    image:
+      beaker: astirn/base-dev
+    command: [bash, -c]
+    arguments:
+      - |
+        echo -e "\n=== Project Directory ==="
+        cd /home/andrew.stirn/projects/VampPrior-Paradox
+        ls -la
+
+        # Basic system info
+        echo -e "\n=== System Info ==="
+        echo "Host: $(hostname) | $(uname -sr)"
+        echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l) | Memory: $(free -h | grep Mem | awk '{print $2}')"
+
+        # Run script
+        bash scripts/<script_name>.sh
+
+    datasets:
+      - mountPath: /home/andrew.stirn/projects/VampPrior-Paradox
+        source:
+          hostPath: /home/andrew.stirn/projects/VampPrior-Paradox
+
+    envVars:
+      - name: WANDB_API_KEY
+        secret: WANDB_API_KEY
+
+    result:
+      path: /output
+
+    resources:
+      gpuCount: 1
+      sharedMemory: 40 GiB
+
+    context:
+      priority: normal
+      preemptible: false
+
+    constraints:
+      cluster: [ai1/octo.ai-aws-g6e]
+
+    timeout: 120h

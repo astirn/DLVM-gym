@@ -11,4 +11,4 @@ model:
   dim_z: 10
 
   prior_params:
-    concentration: 1.5
+    concentration: 1.0
