@@ -43,6 +43,15 @@ class AbstractVampPrior(Prior, ABC):
         return self._u_constraint(self._u)
 
     @property
+    def qu(self) -> MultivariateNormal:
+        was_training = self._encoder.training
+        self._encoder.eval()
+        qu = self._encoder(self.u)
+        if was_training:
+            self._encoder.train()
+        return qu
+
+    @property
     @abstractmethod
     def pz_c(self) -> MultivariateNormal: ...
 
