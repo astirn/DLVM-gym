@@ -1,2 +1,2 @@
-step_based_progress_bar:
+progress_bar_steps:
   _target_: src.callbacks.StepBasedProgressBar

@@ -2,5 +2,5 @@ defaults:
   - checkpoint_last
   - checkpoint_loss
   - checkpoint_nmi
-  - step_based_progress_bar
+  - progress_bar_steps
   - _self_
