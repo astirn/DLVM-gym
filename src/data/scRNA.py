@@ -16,30 +16,38 @@ class scRNADataset(Dataset):
         counts: sp.csr_matrix,
         batch_codes: torch.Tensor,
         cell_type_codes: torch.Tensor,
+        pca: np.ndarray | None = None,
     ) -> None:
         self.counts = counts
         self.batch_codes = batch_codes
         self.cell_type_codes = cell_type_codes
+        self.pca = pca
 
     def __len__(self) -> int:
         return self.counts.shape[0]  # type: ignore[attr-defined]
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         x = self.counts[idx].todense().astype(np.float32)
-        return {
+        item = {
             "x": torch.from_numpy(x),
             "c": self.cell_type_codes[idx].long(),
             "s": self.batch_codes[idx].long(),
         }
+        if self.pca is not None:
+            item["x_pca"] = torch.from_numpy(self.pca[idx].astype(np.float32))
+        return item
 
 
 def collate(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
-    return {
+    out = {
         "x": torch.vstack([b["x"] for b in batch]),
         "l": torch.hstack([b["x"].sum(dim=1) for b in batch]),
         "c": torch.hstack([b["c"] for b in batch]),
         "s": torch.hstack([b["s"] for b in batch]),
     }
+    if "x_pca" in batch[0]:
+        out["x_pca"] = torch.vstack([b["x_pca"] for b in batch])
+    return out
 
 
 class scRNADataModule(BaseDataModule):
@@ -67,6 +75,7 @@ class scRNADataModule(BaseDataModule):
         self._batch_codes: torch.Tensor | None = None
         self._cell_type_keys: list[str] | None = None
         self._cell_type_codes: torch.Tensor | None = None
+        self._pca: np.ndarray | None = None
 
     @property
     def adata(self) -> AnnData:
@@ -103,6 +112,10 @@ class scRNADataModule(BaseDataModule):
         return self._cell_type_keys
 
     @property
+    def pca(self) -> np.ndarray | None:
+        return self._pca
+
+    @property
     def num_cells(self) -> int:
         return self.counts.shape[0]  # type: ignore[attr-defined]
 
@@ -113,10 +126,12 @@ class scRNADataModule(BaseDataModule):
     def prepare_data(self) -> None:
         adata = self.prepare_data_fn(self.root)
         self._counts = sp.csr_matrix(adata.X, dtype=np.int16)
+        if "X_pca" in adata.obsm:
+            self._pca = np.asarray(adata.obsm["X_pca"], dtype=np.float32)
         for covariate in ["batch", "cell_type"]:
             keys, codes = np.unique(adata.obs[covariate], return_inverse=True)
             setattr(self, f"_{covariate}_keys", list(map(str, keys)))
-            setattr(self, f"_{covariate}_codes", torch.tensor(codes, dtype=torch.int8))
+            setattr(self, f"_{covariate}_codes", torch.tensor(codes, dtype=torch.int32))
 
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()
@@ -143,6 +158,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[train_idx],
                 self.batch_codes[train_idx],
                 self.cell_type_codes[train_idx],
+                self._pca[train_idx] if self._pca is not None else None,
             )
 
         if (fit or validate) and self.data["val"] is None:
@@ -150,6 +166,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[val_idx],
                 self.batch_codes[val_idx],
                 self.cell_type_codes[val_idx],
+                self._pca[val_idx] if self._pca is not None else None,
             )
 
         if test and self.data["test"] is None:
@@ -157,6 +174,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[test_idx],
                 self.batch_codes[test_idx],
                 self.cell_type_codes[test_idx],
+                self._pca[test_idx] if self._pca is not None else None,
             )
 
         if predict and self.data["predict"] is None:
@@ -164,6 +182,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[predict_idx],
                 self.batch_codes[predict_idx],
                 self.cell_type_codes[predict_idx],
+                self._pca[predict_idx] if self._pca is not None else None,
             )
 
     def full_dataloader(self) -> DataLoader:
