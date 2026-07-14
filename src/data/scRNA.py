@@ -7,6 +7,7 @@ from anndata import AnnData
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from .base import BaseDataModule
+from .utils import compute_preintegration_pca
 
 
 class scRNADataset(Dataset):
@@ -112,7 +113,9 @@ class scRNADataModule(BaseDataModule):
         return self._cell_type_keys
 
     @property
-    def pca(self) -> np.ndarray | None:
+    def pca(self) -> np.ndarray:
+        if self._pca is None:
+            raise ValueError("Property is not set. Call prepare_data first.")
         return self._pca
 
     @property
@@ -125,9 +128,15 @@ class scRNADataModule(BaseDataModule):
 
     def prepare_data(self) -> None:
         adata = self.prepare_data_fn(self.root)
-        self._counts = sp.csr_matrix(adata.X, dtype=np.int16)
+        counts = sp.csr_matrix(adata.X)
         if "X_pca" in adata.obsm:
             self._pca = np.asarray(adata.obsm["X_pca"], dtype=np.float32)
+        else:
+            self._pca = compute_preintegration_pca(counts)
+        if np.max(counts.data) < 2**15 - 1:
+            self._counts = counts.astype(np.int16)
+        else:
+            self._counts = counts.astype(np.int32)
         for covariate in ["batch", "cell_type"]:
             keys, codes = np.unique(adata.obs[covariate], return_inverse=True)
             setattr(self, f"_{covariate}_keys", list(map(str, keys)))
@@ -158,7 +167,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[train_idx],
                 self.batch_codes[train_idx],
                 self.cell_type_codes[train_idx],
-                self._pca[train_idx] if self._pca is not None else None,
+                self.pca[train_idx],
             )
 
         if (fit or validate) and self.data["val"] is None:
@@ -166,7 +175,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[val_idx],
                 self.batch_codes[val_idx],
                 self.cell_type_codes[val_idx],
-                self._pca[val_idx] if self._pca is not None else None,
+                self.pca[val_idx],
             )
 
         if test and self.data["test"] is None:
@@ -174,7 +183,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[test_idx],
                 self.batch_codes[test_idx],
                 self.cell_type_codes[test_idx],
-                self._pca[test_idx] if self._pca is not None else None,
+                self.pca[test_idx],
             )
 
         if predict and self.data["predict"] is None:
@@ -182,7 +191,7 @@ class scRNADataModule(BaseDataModule):
                 self.counts[predict_idx],
                 self.batch_codes[predict_idx],
                 self.cell_type_codes[predict_idx],
-                self._pca[predict_idx] if self._pca is not None else None,
+                self.pca[predict_idx],
             )
 
     def full_dataloader(self) -> DataLoader:
