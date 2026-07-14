@@ -21,6 +21,7 @@ class scVI(DeepLatentVariableModel):
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
+        encode_covariates: bool = True,
         kl_warmup_steps: int = 0,
         u_initial_strategy: Literal["data", "stratified_data", "random"] | None = None,
         **kwargs,
@@ -28,12 +29,16 @@ class scVI(DeepLatentVariableModel):
         super().__init__()
         self.num_batches = len(datamodule.batch_keys)
         self.num_genes = datamodule.num_genes
+
+        self.encode_covariates = encode_covariates
         self.encoder: torch.nn.Module = instantiate(
             encoder_params,
             num_batches=self.num_batches,
             num_genes=self.num_genes,
+            encode_covariates=encode_covariates,
             **kwargs,
         )
+
         self.decoder: torch.nn.Module = instantiate(
             decoder_params,
             num_batches=self.num_batches,
@@ -47,7 +52,7 @@ class scVI(DeepLatentVariableModel):
 
         if "crypt" in prior_params["_target_"]:
             if u_initial_strategy in ["data", "stratified_data"]:
-                u_initial = sample_u_initial(
+                u_sample = sample_u_initial(
                     datamodule,
                     k=prior_params["k"],
                     u_keys=["x", "s"],
@@ -55,33 +60,27 @@ class scVI(DeepLatentVariableModel):
                         "c" if u_initial_strategy == "stratified_data" else None
                     ),
                 )
-                u_initial = torch.concat(
-                    [
-                        u_initial["x"].log1p(),
-                        F.one_hot(u_initial["s"], num_classes=self.num_batches).float(),
-                    ],
-                    dim=1,
-                )
+                u_x = u_sample["x"].log1p()
+                u_s = F.one_hot(u_sample["s"], num_classes=self.num_batches).float()
+
             elif u_initial_strategy == "random":
-                u_initial = torch.concat(
-                    [
-                        torch.randn(prior_params["k"], self.num_genes),
-                        F.softmax(
-                            torch.randn(prior_params["k"], self.num_batches), dim=1
-                        ),
-                    ],
-                    dim=1,
-                )
+                u_x = torch.randn(prior_params["k"], self.num_genes)
+                u_s = F.softmax(torch.randn(prior_params["k"], self.num_batches), dim=1)
+
             else:
                 raise ValueError(
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
                 )
+
+            u_initial = (
+                torch.concat([u_x, u_s], dim=-1) if self.encode_covariates else u_x
+            )
+
         else:
             u_initial = None
 
         self.prior: Prior = instantiate(
             prior_params,
-            dim_x=self.num_genes + self.num_batches,
             encoder=self.encoder,
             num_data=datamodule.num_cells,
             u_initial=u_initial,
@@ -89,9 +88,12 @@ class scVI(DeepLatentVariableModel):
         )
 
     def qz(self, *, x: Tensor, s: Tensor, **kwargs) -> MultivariateNormal:
-        s = F.one_hot(s, num_classes=self.num_batches).float()
-        xs = torch.concat([x.log1p(), s], dim=-1)
-        return self.encoder(xs)
+        x = x.log1p()
+        if self.encode_covariates:
+            s = F.one_hot(s, num_classes=self.num_batches).float()
+            return self.encoder(torch.concat([x, s], dim=-1))
+        else:
+            return self.encoder(x)
 
     def px(self, *, z: Tensor, s: Tensor, l: Tensor, **kwargs) -> Distribution:
         s = F.one_hot(s, num_classes=self.num_batches).float()

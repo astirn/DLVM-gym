@@ -59,7 +59,6 @@ class VariationalAutoencoder(DeepLatentVariableModel):
 
         self.prior: Prior = instantiate(
             prior_params,
-            dim_x=self.dim_x,
             encoder=self.encoder,
             num_data=self.num_data,
             u_initial=u_initial,
