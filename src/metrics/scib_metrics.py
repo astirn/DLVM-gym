@@ -1,10 +1,22 @@
+from typing import cast
+
 import pandas as pd
 import torch
 from anndata import AnnData
-from scib_metrics.benchmark import BatchCorrection, Benchmarker
+from scib_metrics.benchmark import BatchCorrection, Benchmarker, BioConservation
 from torchmetrics import Metric
 
 from src.models.abstract import DeepLatentVariableModel
+
+
+def bio_conservation_metrics(data: AnnData) -> BioConservation:
+    return BioConservation(
+        isolated_labels=True,
+        nmi_ari_cluster_labels_leiden=True,
+        nmi_ari_cluster_labels_kmeans=False,
+        silhouette_label=True,
+        clisi_knn=True,
+    )
 
 
 def batch_correction_metrics(data: AnnData) -> BatchCorrection:
@@ -14,7 +26,7 @@ def batch_correction_metrics(data: AnnData) -> BatchCorrection:
             ilisi_knn=True,
             kbet_per_label=True,
             graph_connectivity=True,
-            pcr_comparison=False,
+            pcr_comparison=True,
         )
     else:
         return BatchCorrection(
@@ -30,41 +42,69 @@ class scIBMetrics(Metric):
 
     def __init__(self):
         super().__init__()
-        self.add_state("batch", default=[])
-        self.add_state("cell_type", default=[])
-        self.add_state("embedding", default=[])
+        self.add_state("_batch", default=[])
+        self.add_state("_cell_type", default=[])
+        self.add_state("_embedding", default=[])
+        self.add_state("_x_pca", default=[])
+
+    @property
+    def batch(self) -> list[torch.Tensor]:
+        return cast(list[torch.Tensor], self._batch)
+
+    @property
+    def cell_type(self) -> list[torch.Tensor]:
+        return cast(list[torch.Tensor], self._cell_type)
+
+    @property
+    def embedding(self) -> list[torch.Tensor]:
+        return cast(list[torch.Tensor], self._embedding)
+
+    @property
+    def x_pca(self) -> list[torch.Tensor]:
+        return cast(list[torch.Tensor], self._x_pca)
 
     def update(
         self, batch: dict[str, torch.Tensor], model: DeepLatentVariableModel
     ) -> None:
         c, s = batch["c"], batch["s"]
-        z = model.qz(**batch).sample()
-        self.batch.append(s)  # type: ignore[attr-defined]
-        self.cell_type.append(c)  # type: ignore[attr-defined]
-        self.embedding.append(z)  # type: ignore[attr-defined]
+        z = model.qz(**batch).mean
+        self.batch.append(s)
+        self.cell_type.append(c)
+        self.embedding.append(z)
+        if "x_pca" in batch:
+            self.x_pca.append(batch["x_pca"])
 
     def compute(self) -> dict[str, torch.Tensor]:
-        embedding = torch.cat(self.embedding, dim=0)  # type: ignore[attr-defined]
+        embedding = torch.cat(self.embedding, dim=0)
         obs = pd.DataFrame(
             {
-                "batch": torch.cat(self.batch).numpy(force=True),  # type: ignore[attr-defined]
-                "cell_type": torch.cat(self.cell_type).numpy(force=True),  # type: ignore[attr-defined]
+                "batch": torch.cat(self.batch).numpy(force=True),
+                "cell_type": torch.cat(self.cell_type).numpy(force=True),
             }
         )
         adata = AnnData(X=embedding.numpy(force=True), obs=obs)
         adata.obsm["embedding"] = embedding.numpy(force=True)
+
+        pre_integrated_key = None
+        if len(self.x_pca) > 0:
+            pre_integrated_key = "X_pca"
+            adata.obsm[pre_integrated_key] = torch.cat(self.x_pca, dim=0).numpy(
+                force=True
+            )
 
         bm = Benchmarker(
             adata,
             batch_key="batch",
             label_key="cell_type",
             embedding_obsm_keys=["embedding"],
+            bio_conservation_metrics=bio_conservation_metrics(adata),
             batch_correction_metrics=batch_correction_metrics(adata),
+            pre_integrated_embedding_obsm_key=pre_integrated_key,
             n_jobs=-1,
         )
         bm.benchmark()
 
-        df = bm.get_results()
+        df = bm.get_results(min_max_scale=False)
         metric_type_row = df.loc["Metric Type"]
         df = df.drop(index="Metric Type")
         df.columns = pd.MultiIndex.from_arrays(
