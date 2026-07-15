@@ -1,0 +1,22 @@
+# @package _global_
+
+# OpenProblems.bio batch-integration v2: Immune Cell Atlas (cellxgene_census/immune_cell_atlas).
+# 329,762 cells, 2,000 batch-aware HVGs, 12 batches, 35 cell types.
+defaults:
+  - op_default
+  - _self_
+
+data:
+  dataset: op_immune_cell_atlas
+  prepare_data_fn:
+    _target_: toolz.compose_left
+    _args_:
+      - _target_: src.data.utils.scread
+        _partial_: true
+        filename: dataset.h5ad
+        backup_url: https://openproblems-data.s3.amazonaws.com/resources/task_batch_integration/datasets/cellxgene_census/immune_cell_atlas/log_cp10k/dataset.h5ad
+      - _target_: src.data.utils.select_hvg_by_score
+        _partial_: true
+        n_top_genes: 2000
+      - _target_: src.data.utils.use_counts
+        _partial_: true
