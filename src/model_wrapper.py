@@ -43,7 +43,9 @@ class ModelWrapper(LightningModule, ABC):
         super().__setattr__(attr, ModuleList(metrics))
 
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
-        loss = self.model.loss(batch, global_step=self.global_step)
+        loss = self.model.loss(
+            batch, epoch=self.trainer.current_epoch, global_step=self.global_step
+        )
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
@@ -56,7 +58,9 @@ class ModelWrapper(LightningModule, ABC):
         self._set_metrics("_validation_metrics", value)
 
     def validation_step(self, batch, batch_idx):
-        loss = self.model.loss(batch, global_step=self.global_step)
+        loss = self.model.loss(
+            batch, epoch=self.trainer.current_epoch, global_step=self.global_step
+        )
         self.log(
             "val/loss",
             loss,
@@ -99,10 +103,7 @@ class ModelWrapper(LightningModule, ABC):
         qz = self.model.qz(**batch)
         z = qz.sample()
         px = self.model.px(z=z, **batch)
-        predictions = {
-            "qz": qz,
-            "px": px,
-        }
+        predictions = {"qz": qz, "px": px}
 
         try:
             predictions["component_distribution"] = (
