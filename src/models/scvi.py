@@ -22,7 +22,8 @@ class scVI(DeepLatentVariableModel):
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
         encode_covariates: bool = True,
-        kl_warmup_steps: int = 0,
+        kl_warmup_epochs: int | None = None,
+        kl_warmup_steps: int | None = None,
         u_initial_strategy: Literal["data", "stratified_data", "random"] | None = None,
         **kwargs,
     ):

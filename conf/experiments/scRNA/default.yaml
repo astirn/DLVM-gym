@@ -31,6 +31,7 @@ model:
   _recursive_: false
 
   dim_z: ???
+  encode_covariates: true
 
   decoder_params:
     _target_: src.experiments.scRNA.Decoder
