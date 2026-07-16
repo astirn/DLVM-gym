@@ -94,7 +94,7 @@ class Decoder(nn.Module):
         self.deeply_inject_covariates = deeply_inject_covariates
         self.layers = nn.ModuleList(layers)
         self.gene_likelihood = gene_likelihood
-        self.log_theta = nn.Parameter(torch.randn(num_genes))
+        self.log_theta = nn.Parameter(torch.randn(num_genes))  # TODO: is zeros better?
         self.fw = nn.Sequential(
             nn.Linear(dim_hidden, num_genes),
             nn.Softmax(dim=-1),
