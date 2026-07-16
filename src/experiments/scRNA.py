@@ -101,14 +101,32 @@ class Decoder(nn.Module):
         )
         self.fh = nn.Linear(dim_hidden, num_genes)
 
-    def forward(self, zs: torch.Tensor, library_size: torch.Tensor):
-        out = self.net(zs)
-        mu = self.fw(out) * library_size.unsqueeze(1)
+    def forward(
+        self, z: Tensor, s: Tensor, library_size: Tensor
+    ) -> NegativeBinomial | ZeroInflatedNegativeBinomial:
+
+        # handle case when we have multiple z samples for each observed s
+        *leading, d = z.shape
+        if s.ndim < z.ndim:
+            s = s.unsqueeze(0).expand(z.shape[0], *s.shape)
+        z_flat = z.reshape(-1, d)
+        s_flat = s.reshape(-1, s.shape[-1])
+
+        h = z_flat
+        for i, layer in enumerate(self.layers):
+            if _inject_into_layer(i, self.deeply_inject_covariates):
+                h = torch.concat([h, s_flat], dim=-1)
+            h = layer(h)
+
+        # reshape back to original shape
+        h = h.reshape(*leading, -1)
+        mu = self.fw(h) * library_size.unsqueeze(-1)
+
         theta = self.log_theta.exp()
         if self.gene_likelihood == "nb":
             return NegativeBinomial(mu, theta)
         elif self.gene_likelihood == "zinb":
-            rho = self.fh(out)
+            rho = self.fh(h)
             return ZeroInflatedNegativeBinomial(mu, theta, rho)
         else:
             raise NotImplementedError
