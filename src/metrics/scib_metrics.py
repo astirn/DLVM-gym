@@ -9,35 +9,6 @@ from torchmetrics import Metric
 from src.models.abstract import DeepLatentVariableModel
 
 
-def bio_conservation_metrics(data: AnnData) -> BioConservation:
-    return BioConservation(
-        isolated_labels=True,
-        nmi_ari_cluster_labels_leiden=True,
-        nmi_ari_cluster_labels_kmeans=False,
-        silhouette_label=True,
-        clisi_knn=True,
-    )
-
-
-def batch_correction_metrics(data: AnnData) -> BatchCorrection:
-    if data.obs["batch"].nunique() > 1:
-        return BatchCorrection(
-            bras=True,
-            ilisi_knn=True,
-            kbet_per_label=True,
-            graph_connectivity=True,
-            pcr_comparison=True,
-        )
-    else:
-        return BatchCorrection(
-            bras=False,
-            ilisi_knn=False,
-            kbet_per_label=False,
-            graph_connectivity=False,
-            pcr_comparison=True,  # this is a hack to make the metrics work with just a single batch
-        )
-
-
 class scIBMetrics(Metric):
 
     def __init__(self):
@@ -74,7 +45,7 @@ class scIBMetrics(Metric):
         if "x_pca" in batch:
             self.x_pca.append(batch["x_pca"])
 
-    def compute(self) -> dict[str, torch.Tensor]:
+    def _build_adata(self) -> tuple[AnnData, str | None]:
         embedding = torch.cat(self.embedding, dim=0)
         obs = pd.DataFrame(
             {
@@ -91,14 +62,43 @@ class scIBMetrics(Metric):
             adata.obsm[pre_integrated_key] = torch.cat(self.x_pca, dim=0).numpy(
                 force=True
             )
+        return adata, pre_integrated_key
 
+    def _bio_conservation_metrics(self, data: AnnData) -> BioConservation:
+        return BioConservation(
+            isolated_labels=True,
+            nmi_ari_cluster_labels_leiden=True,
+            nmi_ari_cluster_labels_kmeans=False,
+            silhouette_label=True,
+            clisi_knn=True,
+        )
+
+    def _batch_correction_metrics(self, data: AnnData) -> BatchCorrection:
+        if data.obs["batch"].nunique() > 1:
+            return BatchCorrection(
+                bras=True,
+                ilisi_knn=True,
+                kbet_per_label=True,
+                graph_connectivity=True,
+                pcr_comparison=True,
+            )
+        else:
+            return BatchCorrection(
+                bras=False,
+                ilisi_knn=False,
+                kbet_per_label=False,
+                graph_connectivity=False,
+                pcr_comparison=True,  # this is a hack to make the metrics work with just a single batch
+            )
+
+    def _benchmark(self, adata: AnnData, pre_integrated_key: str | None) -> pd.Series:
         bm = Benchmarker(
             adata,
             batch_key="batch",
             label_key="cell_type",
             embedding_obsm_keys=["embedding"],
-            bio_conservation_metrics=bio_conservation_metrics(adata),
-            batch_correction_metrics=batch_correction_metrics(adata),
+            bio_conservation_metrics=self._bio_conservation_metrics(adata),
+            batch_correction_metrics=self._batch_correction_metrics(adata),
             pre_integrated_embedding_obsm_key=pre_integrated_key,
             n_jobs=-1,
         )
@@ -111,9 +111,15 @@ class scIBMetrics(Metric):
             [metric_type_row.values, df.columns], names=["Metric Group", "Metric Name"]
         )
         df = df.astype(float)
-        row = df.iloc[0]
+        return df.iloc[0]
 
+    def _to_metric_dict(self, row: pd.Series) -> dict[str, torch.Tensor]:
         return {
             f"{group}/{name}": torch.tensor(val, dtype=torch.float32)
-            for (group, name), val in row.items()
+            for (group, name), val in dict(row).items()
         }
+
+    def compute(self) -> dict[str, torch.Tensor]:
+        adata, pre_integrated_key = self._build_adata()
+        row = self._benchmark(adata, pre_integrated_key)
+        return self._to_metric_dict(row)

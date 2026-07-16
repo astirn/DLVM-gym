@@ -25,7 +25,7 @@ data:
   _target_: src.data.scRNA.scRNADataModule
   dataset: ???
   prepare_data_fn: ???
-  val_ratio: 0.1 # should be 0 to match openproblems
+  val_ratio: 0.0 # should be 0 to match openproblems
   test_ratio: 0.0 # should be 0 to match openproblems
   batch_size:
     train: 128
@@ -43,6 +43,7 @@ model:
 
   dim_z: 30
   encode_covariates: false
+  deeply_inject_covariates: true
 
   encoder_params:
     _target_: src.experiments.scRNA.Encoder
@@ -74,7 +75,7 @@ metrics:
   full_metrics:
     - _target_: src.metrics.ClusteringMetrics
       label_key: c
-    - _target_: src.metrics.scIBMetrics
+    - _target_: src.metrics.OPMetrics
 
 optimizer:
   _target_: torch.optim.Adam

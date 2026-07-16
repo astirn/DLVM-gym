@@ -32,6 +32,7 @@ model:
 
   dim_z: ???
   encode_covariates: true
+  deeply_inject_covariates: false
 
   decoder_params:
     _target_: src.experiments.scRNA.Decoder
