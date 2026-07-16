@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=arg_parser.sh
-source "${SCRIPT_DIR}/arg_parser.sh"
+# shellcheck source=../arg_parser.sh
+source "${SCRIPT_DIR}/../arg_parser.sh"
 
-parse_args "Sweep DP concentration hyperparameters for a clustering dataset." "$@"
+parse_args "OpenProblems baseline experiments." "$@"
 
 SEED="1,2,3"
 
