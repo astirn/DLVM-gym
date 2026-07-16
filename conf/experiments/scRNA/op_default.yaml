@@ -75,7 +75,7 @@ metrics:
   full_metrics:
     - _target_: src.metrics.ClusteringMetrics
       label_key: c
-    - _target_: src.metrics.OPMetrics
+    - _target_: src.metrics.OpenProblemsMetrics
 
 optimizer:
   _target_: torch.optim.Adam
