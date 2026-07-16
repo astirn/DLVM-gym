@@ -28,24 +28,27 @@ class Encoder(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        dims = [num_genes + num_batches] + [dim_hidden] * num_layers
-        self.net = nn.Sequential(
-            *list(
-                concat(
-                    [
-                        [
-                            nn.Linear(dims[i], dims[i + 1]),
-                            nn.LayerNorm(dims[i + 1]),
-                            nn.ReLU(),
-                            nn.Dropout(0.1),
-                        ]
-                        for i in range(len(dims) - 1)
-                    ]
+
+        layers: list[nn.Module] = []
+        dim_in = num_genes
+        dim_cov = num_batches if encode_covariates else 0
+        for i in range(num_layers):
+            inject = dim_cov > 0 and _inject_into_layer(i, deeply_inject_covariates)
+            linear_in = dim_in + (dim_cov if inject else 0)
+            layers.append(
+                nn.Sequential(
+                    nn.Linear(linear_in, dim_hidden),
+                    nn.BatchNorm1d(dim_hidden, momentum=0.01, eps=0.001),
+                    nn.ReLU(),
+                    nn.Dropout(0.1),
                 )
             )
-        )
-        self.mu = nn.Linear(dims[-1], dim_z)
-        self.log_sigma = nn.Linear(dims[-1], dim_z)
+            dim_in = dim_hidden
+
+        self.deeply_inject_covariates = deeply_inject_covariates and encode_covariates
+        self.layers = nn.ModuleList(layers)
+        self.mu = nn.Linear(dim_hidden, dim_z)
+        self.log_sigma = nn.Linear(dim_hidden, dim_z)
 
     def forward(self, x: Tensor, s: Tensor | None = None) -> dist.MultivariateNormal:
         h = x
