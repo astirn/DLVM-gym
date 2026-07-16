@@ -135,15 +135,18 @@ class Decoder(nn.Module):
 @hydra.main(version_base=None, config_path="../../conf")
 def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = fit(cfg)
+    callbacks = cfg.get("callbacks", {})
 
-    # Log marginal uses best validation loss checkpoint (i.e. best validation ELBO)
-    ckpt = cfg.callbacks.checkpoint_loss
-    ckpt_path = f"{ckpt.dirpath}/{ckpt.filename}.ckpt"
+    # Log marginal likelihood uses best validation loss checkpoint (i.e. best validation ELBO)
+    # With an empty test split this is a No-Op
+    ckpt = "checkpoint_loss" if "checkpoint_loss" in callbacks else "checkpoint_last"
+    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
     trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
 
-    # scIB and NMI on full dataset uses best validation NMI checkpoint
-    ckpt = cfg.callbacks.checkpoint_nmi
-    ckpt_path = f"{ckpt.dirpath}/{ckpt.filename}.ckpt"
+    # scIB and clustering metrics on the full dataset
+    # We prefer the best validation NMI checkpoint when available, otherwise fall back to the last checkpoint
+    ckpt = "checkpoint_nmi" if "checkpoint_nmi" in callbacks else "checkpoint_last"
+    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
     trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
 
