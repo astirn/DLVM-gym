@@ -55,10 +55,10 @@ class OpenProblemsMetrics(scIBMetrics):
     def _batch_correction_metrics(self, data: AnnData) -> BatchCorrection:
         if data.obs["batch"].nunique() > 1:
             return BatchCorrection(
-                bras=False,  # OpenProblems uses ASW batch instead of BRAS
+                bras=False,  # OpenProblems uses classic ASW batch, not BRAS
                 ilisi_knn=True,
                 kbet_per_label=True,
-                graph_connectivity=False,  # OpenProblems method differs from scIB
+                graph_connectivity=False,  # inject Scanpy-connectivities GC below
                 pcr_comparison=True,
             )
         return BatchCorrection(
@@ -71,10 +71,9 @@ class OpenProblemsMetrics(scIBMetrics):
 
     def _to_metric_dict(self, row: pd.Series) -> dict[str, torch.Tensor]:
         metrics = super()._to_metric_dict(row)
-        metrics = keymap(lambda k: k.split("/")[1], metrics)
-        metrics = keyfilter(lambda k: k in OP_METRIC_MAP.keys(), metrics)
-        metrics = keymap(lambda k: OP_METRIC_MAP[k], metrics)
-        return metrics
+        metrics = keymap(lambda k: k.split("/", 1)[1], metrics)
+        metrics = keyfilter(lambda k: k in OP_METRIC_MAP, metrics)
+        return keymap(lambda k: OP_METRIC_MAP[k], metrics)
 
     def compute(self) -> dict[str, torch.Tensor]:
         adata, pre_integrated_key = self._build_adata()
