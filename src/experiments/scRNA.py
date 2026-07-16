@@ -76,28 +76,30 @@ class Decoder(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        dims = [dim_z + num_batches] + [dim_hidden] * num_layers
-        self.net = nn.Sequential(
-            *list(
-                concat(
-                    [
-                        [
-                            nn.Linear(dims[i], dims[i + 1]),
-                            nn.LayerNorm(dims[i + 1]),
-                            nn.ReLU(),
-                        ]
-                        for i in range(len(dims) - 1)
-                    ]
+
+        layers: list[nn.Module] = []
+        dim_in = dim_z
+        for i in range(num_layers):
+            inject = _inject_into_layer(i, deeply_inject_covariates)
+            linear_in = dim_in + (num_batches if inject else 0)
+            layers.append(
+                nn.Sequential(
+                    nn.Linear(linear_in, dim_hidden),
+                    nn.BatchNorm1d(dim_hidden, momentum=0.01, eps=0.001),
+                    nn.ReLU(),
                 )
             )
-        )
+            dim_in = dim_hidden
+
+        self.deeply_inject_covariates = deeply_inject_covariates
+        self.layers = nn.ModuleList(layers)
         self.gene_likelihood = gene_likelihood
-        self.log_theta = nn.Parameter(torch.zeros(num_genes))
+        self.log_theta = nn.Parameter(torch.randn(num_genes))
         self.fw = nn.Sequential(
-            nn.Linear(dims[-1], num_genes),
+            nn.Linear(dim_hidden, num_genes),
             nn.Softmax(dim=-1),
         )
-        self.fh = nn.Linear(dims[-1], num_genes)
+        self.fh = nn.Linear(dim_hidden, num_genes)
 
     def forward(self, zs: torch.Tensor, library_size: torch.Tensor):
         out = self.net(zs)
