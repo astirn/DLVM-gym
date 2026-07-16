@@ -21,7 +21,8 @@ class scVI(DeepLatentVariableModel):
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
-        encode_covariates: bool = True,
+        encode_covariates: bool = False,
+        deeply_inject_covariates: bool = True,
         u_initial_strategy: Literal["data", "stratified_data", "random"] | None = None,
         **kwargs,
     ):
@@ -35,6 +36,7 @@ class scVI(DeepLatentVariableModel):
             num_batches=self.num_batches,
             num_genes=self.num_genes,
             encode_covariates=encode_covariates,
+            deeply_inject_covariates=deeply_inject_covariates,
             **kwargs,
         )
 
@@ -42,6 +44,7 @@ class scVI(DeepLatentVariableModel):
             decoder_params,
             num_batches=self.num_batches,
             num_genes=self.num_genes,
+            deeply_inject_covariates=deeply_inject_covariates,
             **kwargs,
         )
 
@@ -67,9 +70,7 @@ class scVI(DeepLatentVariableModel):
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
                 )
 
-            u_initial = (
-                torch.concat([u_x, u_s], dim=-1) if self.encode_covariates else u_x
-            )
+            u_initial = [u_x, u_s] if self.encode_covariates else [u_x]
 
         else:
             u_initial = None
@@ -86,16 +87,12 @@ class scVI(DeepLatentVariableModel):
         x = x.log1p()
         if self.encode_covariates:
             s = F.one_hot(s, num_classes=self.num_batches).float()
-            return self.encoder(torch.concat([x, s], dim=-1))
-        else:
-            return self.encoder(x)
+            return self.encoder(x, s)
+        return self.encoder(x)
 
     def px(self, *, z: Tensor, s: Tensor, l: Tensor, **kwargs) -> Distribution:
         s = F.one_hot(s, num_classes=self.num_batches).float()
-        if z.ndim > s.ndim:
-            s = s.unsqueeze(0).expand(z.shape[0], -1, -1)
-        zs = torch.concat([z, s], dim=-1)
-        return self.decoder(zs, l)
+        return self.decoder(z, s, l)
 
     def loss(self, batch: dict[str, Tensor], *, epoch: int, global_step: int) -> Tensor:
         x, s, l = batch["x"], batch["s"], batch["l"]

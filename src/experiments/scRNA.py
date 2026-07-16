@@ -4,10 +4,14 @@ import torch.distributions as dist
 import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-from toolz import concat
+from torch import Tensor
 
 from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
 from src.fit import fit
+
+
+def _inject_into_layer(layer_idx: int, deeply_inject: bool) -> bool:
+    return layer_idx == 0 or deeply_inject
 
 
 class Encoder(nn.Module):
@@ -19,6 +23,8 @@ class Encoder(nn.Module):
         num_batches: int,
         num_genes: int,
         num_layers: int,
+        encode_covariates: bool,
+        deeply_inject_covariates: bool,
         **kwargs,
     ):
         super().__init__()
@@ -41,10 +47,15 @@ class Encoder(nn.Module):
         self.mu = nn.Linear(dims[-1], dim_z)
         self.log_sigma = nn.Linear(dims[-1], dim_z)
 
-    def forward(self, xs: torch.Tensor) -> dist.MultivariateNormal:
-        out = self.net(xs)
-        mu = self.mu(out)
-        sigma = (self.log_sigma(out).exp() + 1e-4).sqrt()
+    def forward(self, x: Tensor, s: Tensor | None = None) -> dist.MultivariateNormal:
+        h = x
+        for i, layer in enumerate(self.layers):
+            if s is not None and _inject_into_layer(i, self.deeply_inject_covariates):
+                h = torch.concat([h, s], dim=-1)
+            h = layer(h)
+
+        mu = self.mu(h)
+        sigma = (self.log_sigma(h).exp() + 1e-4).sqrt()
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
@@ -58,6 +69,7 @@ class Decoder(nn.Module):
         num_batches: int,
         num_genes: int,
         num_layers: int,
+        deeply_inject_covariates: bool,
         **kwargs,
     ):
         super().__init__()

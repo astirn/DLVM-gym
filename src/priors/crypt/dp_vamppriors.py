@@ -144,7 +144,7 @@ class DirichletProcessVampPrior(VampPrior):
             )
         log_a = math.log(self.concentration)
         log_1pa = math.log(1 + self.concentration)
-        j = torch.arange(self.k, device=self.u.device, dtype=torch.float)
+        j = torch.arange(self.k, device=self.u[0].device, dtype=torch.float)
         log_probs = j * (log_a - log_1pa) - log_1pa
         log_probs[-1] += log_1pa  # last component: pi_K has no 1/(1+alpha0) factor
         return MixtureSameFamily(Categorical(logits=log_probs), self.pz_c)

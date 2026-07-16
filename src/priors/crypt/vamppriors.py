@@ -19,7 +19,7 @@ class VampPrior(AbstractVampPrior):
     def pz(self) -> dist.Distribution:
         return dist.MixtureSameFamily(
             dist.Categorical(
-                logits=torch.zeros(self.k).to(self.u.device, non_blocking=True)
+                logits=torch.zeros(self.k).to(self.u[0].device, non_blocking=True)
             ),
             self.pz_c,
         )
