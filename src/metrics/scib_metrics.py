@@ -100,7 +100,7 @@ class scIBMetrics(Metric):
             bio_conservation_metrics=self._bio_conservation_metrics(adata),
             batch_correction_metrics=self._batch_correction_metrics(adata),
             pre_integrated_embedding_obsm_key=pre_integrated_key,
-            n_jobs=-1,
+            n_jobs=8,
         )
         bm.benchmark()
 
