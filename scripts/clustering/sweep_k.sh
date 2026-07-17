@@ -13,6 +13,7 @@ SEED="1,2,3,4,5"
 
 PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/clustering/${DATASET} --multirun \
     hydra.launcher.n_jobs=$N_JOBS \
+    paths.log_dir='logs/${experiment_name}/'"$SCRIPT_NAME" \
     priors@model.prior_params=$PRIOR \
     model.prior_params.k=$K \
     model.u_initial_strategy=$U_INITIAL_STRATEGY \
@@ -20,4 +21,5 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     loggers.wandb.group='${experiment_name}/'"$SCRIPT_NAME" \
     loggers.wandb.mode=$WANDB_MODE \
     loggers.wandb.job_type=sweep \
+    loggers.wandb.tags=["v1"] \
     seed=$SEED
