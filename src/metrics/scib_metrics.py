@@ -68,7 +68,7 @@ class scIBMetrics(Metric):
         return BioConservation(
             isolated_labels=True,
             nmi_ari_cluster_labels_leiden=True,
-            nmi_ari_cluster_labels_kmeans=False,
+            nmi_ari_cluster_labels_kmeans=True,
             silhouette_label=True,
             clisi_knn=True,
         )
@@ -100,7 +100,7 @@ class scIBMetrics(Metric):
             bio_conservation_metrics=self._bio_conservation_metrics(adata),
             batch_correction_metrics=self._batch_correction_metrics(adata),
             pre_integrated_embedding_obsm_key=pre_integrated_key,
-            n_jobs=8,
+            n_jobs=-1,
         )
         bm.benchmark()
 
