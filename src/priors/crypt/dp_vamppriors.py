@@ -6,7 +6,7 @@ from torch.distributions import (
     Beta,
     Categorical,
     Distribution,
-    Gamma,
+    Independent,
     MixtureSameFamily,
     kl_divergence,
 )
@@ -60,8 +60,22 @@ class DirichletProcessVampPrior(VampPrior):
         return Gamma(self.log_alpha.exp(), self.log_beta.exp())
 
     @property
+    def has_global_latent_variables(self) -> bool:
+        return True
+
+    @property
     def gamma(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.log_gamma.exp()[:, 0], self.log_gamma.exp()[:, 1]
+
+    @property
+    def pv(self) -> Distribution:
+        ones = torch.ones(self.k - 1, device=self.log_gamma.device)
+        return Independent(Beta(ones, self.concentration * ones), 1)
+
+    @property
+    def qv(self) -> Distribution:
+        gamma_1, gamma_2 = self.gamma
+        return Independent(Beta(gamma_1[:-1], gamma_2[:-1]), 1)
 
     def e_log_v_and_e_log_vm1(self) -> tuple[torch.Tensor, torch.Tensor]:
         gamma_1, gamma_2 = self.gamma
@@ -135,19 +149,22 @@ class DirichletProcessVampPrior(VampPrior):
         qc_z = self.qc(log_pz_c, e_log_v, e_log_vm1)
         return qc_z
 
-    @property
-    def pz(self) -> Distribution:
-        if self.concentration is None:
-            raise NotImplementedError(
-                "Exact log p(z) requires integrating alpha_0 ~ Gamma(a, b) over "
-                "the stick-breaking weights, which has no closed form."
-            )
-        log_a = math.log(self.concentration)
-        log_1pa = math.log(1 + self.concentration)
-        j = torch.arange(self.k, device=self.u[0].device, dtype=torch.float)
-        log_probs = j * (log_a - log_1pa) - log_1pa
-        log_probs[-1] += log_1pa  # last component: pi_K has no 1/(1+alpha0) factor
-        return MixtureSameFamily(Categorical(logits=log_probs), self.pz_c)
+    def global_importance_sampling(self, k: int) -> tuple[dict[str, Tensor], Tensor]:
+        v = self.qv.sample((k,))
+        log_pdq = self.pv.log_prob(v) - self.qv.log_prob(v)
+        return {"v": v}, log_pdq
+
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None) -> Tensor:
+        if globals is None or "v" not in globals:
+            raise ValueError("globals must contain 'v'")
+        v = globals["v"].unsqueeze(1).unsqueeze(1)
+        log_v = torch.cat([v.log(), torch.zeros_like(v[..., :1])], dim=-1)
+        log_1mv = torch.log1p(-v)
+        prefix = torch.cat(
+            [torch.zeros_like(log_1mv[..., :1]), log_1mv.cumsum(dim=-1)], dim=-1
+        )
+        pz_v = MixtureSameFamily(Categorical(logits=log_v + prefix), self.pz_c)
+        return pz_v.log_prob(z)
 
 
 class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):

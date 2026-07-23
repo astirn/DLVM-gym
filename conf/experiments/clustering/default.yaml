@@ -49,7 +49,7 @@ metrics:
 
   test_metrics:
     - _target_: src.metrics.ModelMetrics
-      k: 5000
+      k_local: 5000
 
   full_metrics:
     - _target_: src.metrics.ClusteringMetrics
