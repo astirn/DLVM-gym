@@ -1,5 +1,3 @@
-import math
-
 import torch
 from torch import Tensor
 from torch.distributions import (
@@ -20,44 +18,18 @@ class DirichletProcessVampPrior(VampPrior):
         self,
         *,
         num_data: int,
-        concentration: float | None = None,
-        concentration_prior_params: tuple[float, float] | None = None,
+        concentration: float,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
         self.num_data = num_data
-
-        if (concentration is None) == (concentration_prior_params is None):
-            raise ValueError(
-                "Specify either concentration or concentration_prior_params"
-            )
         self.concentration = concentration
 
         log_gamma_init = torch.zeros(self.k, 2)
-
-        if concentration is not None:
-            log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
-
-        elif concentration_prior_params is not None:
-            self.register_buffer("a", torch.as_tensor(concentration_prior_params[0]))
-            self.register_buffer("b", torch.as_tensor(concentration_prior_params[1]))
-            self.log_alpha = torch.nn.Parameter(torch.tensor(0.0))
-            self.log_beta = torch.nn.Parameter(torch.tensor(0.0))
-            log_gamma_init[:, 1] = (
-                torch.ones(self.k)
-                * (concentration_prior_params[0] / concentration_prior_params[1])
-            ).log()
+        log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
 
         self.log_gamma = torch.nn.Parameter(log_gamma_init)
-
-    @property
-    def pkappa(self) -> Gamma:
-        return Gamma(self.get_buffer("a"), self.get_buffer("b"))
-
-    @property
-    def qkappa(self) -> Gamma:
-        return Gamma(self.log_alpha.exp(), self.log_beta.exp())
 
     @property
     def has_global_latent_variables(self) -> bool:
@@ -97,27 +69,11 @@ class DirichletProcessVampPrior(VampPrior):
         )
         return Categorical(logits=log_probs)
 
-    def dkl_kappa(self) -> float | torch.Tensor:
-        if self.concentration is None:
-            return kl_divergence(self.qkappa, self.pkappa)
-        else:
-            return 0.0
-
-    def dkl_v(self, log_vm1: Tensor) -> torch.Tensor:
+    def dkl_v(self) -> torch.Tensor:
         gamma_1, gamma_2 = self.gamma
         qv = Beta(gamma_1, gamma_2)
-        if self.concentration is None:
-            alpha, beta = self.log_alpha.exp(), self.log_beta.exp()
-            E_log_kappa = torch.digamma(alpha) - self.log_beta
-            E_kappa = alpha / beta
-            return (
-                -qv.entropy()[:-1].sum()
-                - (self.k - 1) * E_log_kappa
-                - (E_kappa - 1) * log_vm1[:-1].sum()
-            )
-        else:
-            pv = Beta(1, self.concentration)
-            return kl_divergence(qv, pv)[:-1].sum()
+        pv = Beta(1, self.concentration)
+        return kl_divergence(qv, pv)[:-1].sum()
 
     def dkl_c(self, qc_z: Categorical, log_v: Tensor, log_vm1: Tensor) -> torch.Tensor:
         qc_gtj_z = torch.fliplr(torch.cumsum(torch.fliplr(qc_z.probs), dim=1)[:, :-1])
@@ -140,7 +96,7 @@ class DirichletProcessVampPrior(VampPrior):
         local_kl = self.dkl_z(qz_x, qc_z, log_pz_c) + self.dkl_c(
             qc_z, e_log_v, e_log_vm1
         )
-        global_kl = self.dkl_kappa() + self.dkl_v(e_log_vm1)
+        global_kl = self.dkl_v()
         return local_kl.mean() + global_kl / self.num_data
 
     def component_distribution(self, z: Tensor) -> Categorical:
