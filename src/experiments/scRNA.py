@@ -137,18 +137,28 @@ def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = fit(cfg)
     callbacks = cfg.get("callbacks", {})
 
-    # Log marginal likelihood uses best validation loss checkpoint (i.e. best validation ELBO)
-    # With an empty test split this is a No-Op
-    ckpt = "checkpoint_loss" if "checkpoint_loss" in callbacks else "checkpoint_last"
-    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
-    trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
+    # collect metrics at best validation loss checkpoint
+    ckpt = "checkpoint_loss"
+    if ckpt in callbacks:
+        ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
 
-    # scIB and clustering metrics on the full dataset
-    # We prefer the best validation NMI checkpoint when available, otherwise fall back to the last checkpoint
-    ckpt = "checkpoint_nmi" if "checkpoint_nmi" in callbacks else "checkpoint_last"
-    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
-    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
-    trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
+        # test-set metrics at best validation loss checkpoint
+        trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
+
+        # full-set metrics at best validation loss checkpoint
+        model.test_prefix = "best"
+        model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+        trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
+
+    # collect metrics at final checkpoint
+    ckpt = "checkpoint_last"
+    if ckpt in callbacks:
+        ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
+
+        # full-set metrics at final checkpoint
+        model.test_prefix = "last"
+        model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+        trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":
