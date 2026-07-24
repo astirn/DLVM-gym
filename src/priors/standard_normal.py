@@ -23,5 +23,5 @@ class StandardNormalPrior(Prior):
     def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:
         return dist.kl_divergence(qz_x, self.pz).mean()
 
-    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None) -> Tensor:
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
         return self.pz.log_prob(z)

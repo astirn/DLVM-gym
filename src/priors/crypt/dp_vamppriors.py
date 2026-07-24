@@ -110,7 +110,7 @@ class DirichletProcessVampPrior(VampPrior):
         log_pdq = self.pv.log_prob(v) - self.qv.log_prob(v)
         return {"v": v}, log_pdq
 
-    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None) -> Tensor:
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
         if globals is None or "v" not in globals:
             raise ValueError("globals must contain 'v'")
         v = globals["v"].unsqueeze(1).unsqueeze(1)

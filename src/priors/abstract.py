@@ -20,5 +20,5 @@ class Prior(Module, ABC):
     def global_importance_sampling(self, k: int) -> tuple[dict[str, Tensor], Tensor]:
         raise NotImplementedError  # optionally required for ModelMetrics
 
-    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None) -> Tensor:
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
         raise NotImplementedError  # optionally required for ModelMetrics
