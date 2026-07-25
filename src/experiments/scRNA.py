@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from torch import Tensor
 
 from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+from src.experiments.utils import checkpoint_path
 from src.fit import fit
 
 
@@ -137,28 +138,25 @@ def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = fit(cfg)
     callbacks = cfg.get("callbacks", {})
 
-    # collect metrics at best validation loss checkpoint
-    ckpt = "checkpoint_loss"
-    if ckpt in callbacks:
-        ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
+    # only collect test-set metrics at best validation loss checkpoint
+    if "checkpoint_loss" in callbacks:
+        trainer.test(
+            model,
+            datamodule.test_dataloader(),
+            ckpt_path=checkpoint_path(callbacks.checkpoint_loss),
+        )
 
-        # test-set metrics at best validation loss checkpoint
-        trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
-
-        # full-set metrics at best validation loss checkpoint
-        model.test_prefix = "best"
-        model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
-        trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
-
-    # collect metrics at final checkpoint
-    ckpt = "checkpoint_last"
-    if ckpt in callbacks:
-        ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
-
-        # full-set metrics at final checkpoint
-        model.test_prefix = "last"
-        model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
-        trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
+    # instantiate full-set metrics
+    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    for key, ckpt_cfg in callbacks.items():
+        if not key.startswith("checkpoint_"):
+            continue
+        model.test_prefix = ckpt_cfg.filename
+        trainer.test(
+            model,
+            datamodule.full_dataloader(),
+            ckpt_path=checkpoint_path(ckpt_cfg),
+        )
 
 
 if __name__ == "__main__":
