@@ -10,6 +10,8 @@
 
 defaults:
   - /callbacks/checkpoint_last
+  - /callbacks/checkpoint_loss
+  - /callbacks/checkpoint_nmi
   - /callbacks/progress_bar_epochs
   - /loggers@loggers: default
   - /priors@model.prior_params: standard_normal
