@@ -40,7 +40,9 @@ class DeepLatentVariableModel(Module, ABC):
     ) -> Tensor: ...
 
     def beta(self, epoch: int, global_step: int) -> float:
-        if self.kl_warmup_epochs is not None and self.kl_warmup_epochs > 0:
+        if not self.training:
+            return 1.0
+        elif self.kl_warmup_epochs is not None and self.kl_warmup_epochs > 0:
             return min(1.0, epoch / self.kl_warmup_epochs)
         elif self.kl_warmup_steps is not None and self.kl_warmup_steps > 0:
             return min(1.0, global_step / self.kl_warmup_steps)

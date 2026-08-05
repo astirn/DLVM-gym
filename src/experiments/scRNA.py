@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from torch import Tensor
 
 from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
+from src.experiments.utils import checkpoint_path
 from src.fit import fit
 
 
@@ -137,18 +138,25 @@ def main(cfg: DictConfig) -> None:
     datamodule, model, trainer = fit(cfg)
     callbacks = cfg.get("callbacks", {})
 
-    # Log marginal likelihood uses best validation loss checkpoint (i.e. best validation ELBO)
-    # With an empty test split this is a No-Op
-    ckpt = "checkpoint_loss" if "checkpoint_loss" in callbacks else "checkpoint_last"
-    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
-    trainer.test(model, datamodule.test_dataloader(), ckpt_path=ckpt_path)
+    # only collect test-set metrics at best validation loss checkpoint
+    if "checkpoint_loss" in callbacks:
+        trainer.test(
+            model,
+            datamodule.test_dataloader(),
+            ckpt_path=checkpoint_path(callbacks.checkpoint_loss),
+        )
 
-    # scIB and clustering metrics on the full dataset
-    # We prefer the best validation NMI checkpoint when available, otherwise fall back to the last checkpoint
-    ckpt = "checkpoint_nmi" if "checkpoint_nmi" in callbacks else "checkpoint_last"
-    ckpt_path = f"{callbacks[ckpt].dirpath}/{callbacks[ckpt].filename}.ckpt"
+    # instantiate full-set metrics
     model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
-    trainer.test(model, datamodule.full_dataloader(), ckpt_path=ckpt_path)
+    for key, ckpt_cfg in callbacks.items():
+        if not key.startswith("checkpoint_"):
+            continue
+        model.test_prefix = ckpt_cfg.filename
+        trainer.test(
+            model,
+            datamodule.full_dataloader(),
+            ckpt_path=checkpoint_path(ckpt_cfg),
+        )
 
 
 if __name__ == "__main__":

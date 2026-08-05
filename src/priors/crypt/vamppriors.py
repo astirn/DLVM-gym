@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.distributions as dist
+from torch import Tensor
 
 from .abstract import AbstractVampPrior
 
@@ -24,13 +25,16 @@ class VampPrior(AbstractVampPrior):
             self.pz_c,
         )
 
-    def component_distribution(self, z: torch.Tensor) -> dist.Categorical:
+    def component_distribution(self, z: Tensor) -> dist.Categorical:
         return dist.Categorical(logits=self.log_pz_c(z))
 
-    def dkl(self, qz_x: dist.Distribution, z_sample: torch.Tensor) -> torch.Tensor:
+    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:
         log_pz_c = self.log_pz_c(z_sample)
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
+
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
+        return self.pz.log_prob(z)
 
 
 class VampPriorUnchained(VampPrior):
