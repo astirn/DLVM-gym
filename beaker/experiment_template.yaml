@@ -18,7 +18,19 @@ tasks:
         echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l) | Memory: $(free -h | grep Mem | awk '{print $2}')"
 
         # Run script
-        bash scripts/<script_name>.sh
+        # bash scripts/clustering/baselines.sh mnist -n 5
+        # bash scripts/clustering/baselines.sh fashion_mnist -n 5
+        # bash scripts/clustering/sweep_k.sh mnist -n 5
+        # bash scripts/clustering/sweep_k.sh fashion_mnist -n 5
+        # bash scripts/clustering/sweep_dp_conc.sh mnist -n 5
+        # bash scripts/clustering/sweep_dp_conc.sh fashion_mnist -n 5
+
+        # bash scripts/scRNA/sweep_dp_conc.sh op_dkd -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh op_immune_cell_atlas -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh op_gtex_v9 -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh op_mouse_pancreas_atlas -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh op_hypomap -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh op_tabula_sapiens -n 3
 
     datasets:
       - mountPath: /home/andrew.stirn/projects/VampPrior-Paradox
@@ -43,4 +55,4 @@ tasks:
     constraints:
       cluster: [ai1/octo.ai-aws-g6e]
 
-    timeout: 120h
+    timeout: 720h
