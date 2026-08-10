@@ -11,6 +11,10 @@ class Prior(Module, ABC):
     def has_global_latent_variables(self) -> bool:
         return False
 
+    @property
+    @abstractmethod
+    def pz(self) -> Distribution: ...
+
     @abstractmethod  # required for model training
     def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor: ...
 
@@ -20,5 +24,7 @@ class Prior(Module, ABC):
     def global_importance_sampling(self, k: int) -> tuple[dict[str, Tensor], Tensor]:
         raise NotImplementedError  # optionally required for ModelMetrics
 
-    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
+    def log_pz(
+        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
+    ) -> Tensor:
         raise NotImplementedError  # optionally required for ModelMetrics

@@ -36,6 +36,11 @@ class DirichletProcessVampPrior(VampPrior):
         return True
 
     @property
+    def pz(self) -> Distribution:
+        logits = self.log_pi(*self.log_e_v_and_log_e_vm1())
+        return MixtureSameFamily(Categorical(logits=logits), self.pz_c)
+
+    @property
     def gamma(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.log_gamma.exp()[:, 0], self.log_gamma.exp()[:, 1]
 
@@ -59,15 +64,24 @@ class DirichletProcessVampPrior(VampPrior):
         )
         return e_log_v, e_log_vm1
 
-    def qc(self, log_pz_c: Tensor, e_log_v: Tensor, e_log_vm1: Tensor) -> Categorical:
-        log_probs = (
-            log_pz_c
-            + e_log_v
-            + torch.concat(
-                [torch.zeros_like(e_log_vm1)[:1], torch.cumsum(e_log_vm1, dim=0)[:-1]]
-            )
+    def log_e_v_and_log_e_vm1(self) -> tuple[torch.Tensor, torch.Tensor]:
+        gamma_1, gamma_2 = self.gamma
+        log_gamma = (gamma_1 + gamma_2).log()
+        log_e_v = (gamma_1.log() - log_gamma)[:-1]
+        log_e_v = torch.concat([log_e_v, torch.zeros_like(log_e_v[:1])])
+        log_e_vm1 = (gamma_2.log() - log_gamma)[:-1]
+        log_e_vm1 = torch.concat(
+            [log_e_vm1, torch.full_like(log_e_vm1[:1], -torch.inf)]
         )
-        return Categorical(logits=log_probs)
+        return log_e_v, log_e_vm1
+
+    def log_pi(self, log_v: Tensor, log_vm1: Tensor) -> Tensor:
+        return log_v + torch.concat(
+            [torch.zeros_like(log_vm1)[:1], torch.cumsum(log_vm1, dim=0)[:-1]]
+        )
+
+    def qc(self, log_pz_c: Tensor, e_log_v: Tensor, e_log_vm1: Tensor) -> Categorical:
+        return Categorical(logits=log_pz_c + self.log_pi(e_log_v, e_log_vm1))
 
     def dkl_v(self) -> torch.Tensor:
         gamma_1, gamma_2 = self.gamma
@@ -110,10 +124,14 @@ class DirichletProcessVampPrior(VampPrior):
         log_pdq = self.pv.log_prob(v) - self.qv.log_prob(v)
         return {"v": v}, log_pdq
 
-    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
-        if globals is None or "v" not in globals:
+    def log_pz(
+        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
+    ) -> Tensor:
+        if global_samples is None:
+            return self.pz.log_prob(z)
+        if "v" not in global_samples:
             raise ValueError("globals must contain 'v'")
-        v = globals["v"].unsqueeze(1).unsqueeze(1)
+        v = global_samples["v"].unsqueeze(1).unsqueeze(1)
         log_v = torch.cat([v.log(), torch.zeros_like(v[..., :1])], dim=-1)
         log_1mv = torch.log1p(-v)
         prefix = torch.cat(
