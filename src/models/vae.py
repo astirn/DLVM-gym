@@ -20,11 +20,10 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         encoder_params: dict[str, Any],
         decoder_params: dict[str, Any],
         prior_params: dict[str, Any],
-        kl_warmup_steps: int = 0,
         u_initial_strategy: Literal["data", "stratified_data", "random"] | None = None,
         **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.dim_x = datamodule.dim
         self.num_data = datamodule.num_data
         self.encoder: torch.nn.Module = instantiate(
@@ -33,10 +32,6 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         self.decoder: torch.nn.Module = instantiate(
             decoder_params, dim_x=self.dim_x, **kwargs
         )
-
-        if kl_warmup_steps < 0:
-            raise ValueError("kl_warmup_steps must be non-negative")
-        self.kl_warmup_steps = kl_warmup_steps
 
         if "crypt" in prior_params["_target_"]:
             if u_initial_strategy in ["data", "stratified_data"]:
@@ -59,7 +54,6 @@ class VariationalAutoencoder(DeepLatentVariableModel):
 
         self.prior: Prior = instantiate(
             prior_params,
-            dim_x=self.dim_x,
             encoder=self.encoder,
             num_data=self.num_data,
             u_initial=u_initial,
@@ -72,16 +66,11 @@ class VariationalAutoencoder(DeepLatentVariableModel):
     def px(self, *, z: Tensor, **kwargs) -> Distribution:
         return self.decoder(z)
 
-    def beta(self, global_step: int) -> float:
-        if self.kl_warmup_steps == 0:
-            return 1.0
-        return min(1.0, global_step / self.kl_warmup_steps)
-
-    def loss(self, batch: dict[str, Tensor], global_step: int) -> Tensor:
+    def loss(self, batch: dict[str, Tensor], *, epoch: int, global_step: int) -> Tensor:
         x = batch["x"]
         qz_x = self.qz(x=x)
         z_sample = qz_x.rsample()
         px_z = self.px(z=z_sample)
-        beta = self.beta(global_step)
+        beta = self.beta(epoch, global_step)
         elbo = px_z.log_prob(x).mean() - beta * self.prior.dkl(qz_x, z_sample)
         return -elbo

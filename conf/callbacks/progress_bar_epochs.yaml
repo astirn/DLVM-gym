@@ -1,0 +1,2 @@
+progress_bar_epochs:
+  _target_: lightning.pytorch.callbacks.TQDMProgressBar

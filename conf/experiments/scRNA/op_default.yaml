@@ -1,0 +1,90 @@
+# @package _global_
+
+# Shared base for the OpenProblems.bio batch-integration scVI baseline.
+#
+# This mirrors the published scVI method
+# (openproblems-bio/task_batch_integration, src/methods/scvi):
+#   SCVI(adata, n_latent=30, n_hidden=128, n_layers=2)  # zinb, dispersion=gene
+#   vae.train(max_epochs=400, train_size=1.0)           # Adam lr=1e-3, eps=0.01,
+#                                                       # wd=1e-6, 400-epoch KL warmup
+
+defaults:
+  - /callbacks/checkpoint_last
+  - /callbacks/checkpoint_loss
+  - /callbacks/checkpoint_nmi
+  - /callbacks/progress_bar_epochs
+  - /loggers@loggers: default
+  - /priors@model.prior_params: standard_normal
+  - /hydra
+  - /paths
+  - /trainer@trainer: epoch_based
+  - _self_
+
+experiment_name: scRNA/${data.dataset}
+seed: 1
+
+data:
+  _target_: src.data.scRNA.scRNADataModule
+  dataset: ???
+  prepare_data_fn: ???
+  val_ratio: 0.1 # should be 0 to match openproblems
+  test_ratio: 0.1 # should be 0 to match openproblems
+  batch_size:
+    train: 128
+    val: 128
+    test: 8
+    predict: 128
+  num_workers: 8
+  pin_memory: true
+  root: datasets/scRNA-seq
+  seed: ${seed}
+
+model:
+  _target_: src.models.scVI
+  _recursive_: false
+
+  dim_z: 30
+  encode_covariates: false
+  deeply_inject_covariates: true
+
+  encoder_params:
+    _target_: src.experiments.scRNA.Encoder
+    dim_hidden: 128
+    num_layers: 2
+
+  decoder_params:
+    _target_: src.experiments.scRNA.Decoder
+    dim_hidden: 128
+    num_layers: 2
+    gene_likelihood: zinb
+
+  prior_params:
+    dim_z: ${model.dim_z}
+    concentration: 1.0
+
+  u_initial_strategy: random
+  kl_warmup_epochs: ${trainer.max_epochs} # openproblems uses full 400-epoch KL warmup
+
+metrics:
+  validation_metrics:
+    - _target_: src.metrics.ClusteringMetrics
+      label_key: c
+
+  test_metrics:
+    - _target_: src.metrics.ModelMetrics
+      k: 5000
+
+  full_metrics:
+    - _target_: src.metrics.ClusteringMetrics
+      label_key: c
+    - _target_: src.metrics.scIBMetrics
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.0e-3
+  eps: 0.01
+  weight_decay: 1.0e-6
+
+trainer:
+  max_epochs: 400
+  num_sanity_val_steps: 0

@@ -1,0 +1,207 @@
+{
+  "_commit": "76ce7f288da591b1b19c32cbfe8ce50bc3706ece",
+  "_method_id": "scvi",
+  "_note": "Raw metric_values are the OpenProblems.bio batch-integration v2 scVI results. NA means the metric is not applicable for embedding-output methods or was not computed for that dataset.",
+  "_source": "openproblems-bio/website results/batch_integration/data/results.json",
+  "_source_url": "https://raw.githubusercontent.com/openproblems-bio/website/76ce7f288da591b1b19c32cbfe8ce50bc3706ece/results/batch_integration/data/results.json",
+  "results": {
+    "cellxgene_census/dkd": {
+      "mean_score": 0.5226,
+      "metric_values": {
+        "ari": 0.8284,
+        "asw_batch": 0.9166,
+        "asw_label": 0.5754,
+        "cell_cycle_conservation": 0.5349,
+        "clisi": 0.9992,
+        "graph_connectivity": 0.9812,
+        "hvg_overlap": "NA",
+        "ilisi": 0.303,
+        "isolated_label_asw": "NA",
+        "isolated_label_f1": "NA",
+        "kbet": 0.2538,
+        "nmi": 0.8495,
+        "pcr": 0.6671
+      },
+      "scaled_scores": {
+        "ari": 0.8284,
+        "asw_batch": 0.8297,
+        "asw_label": 0.1717,
+        "cell_cycle_conservation": 0.5894,
+        "clisi": 0.997,
+        "graph_connectivity": 0.975,
+        "hvg_overlap": 0,
+        "ilisi": 0.6276,
+        "isolated_label_asw": 0,
+        "isolated_label_f1": 0,
+        "kbet": 0.258,
+        "nmi": 0.8493,
+        "pcr": 0.6671
+      }
+    },
+    "cellxgene_census/gtex_v9": {
+      "mean_score": 0.4966,
+      "metric_values": {
+        "ari": 0.7046,
+        "asw_batch": 0.8991,
+        "asw_label": 0.5367,
+        "cell_cycle_conservation": 0.6278,
+        "clisi": 0.9995,
+        "graph_connectivity": 0.966,
+        "hvg_overlap": "NA",
+        "ilisi": 0.0497,
+        "isolated_label_asw": 0.6288,
+        "isolated_label_f1": 0.1041,
+        "kbet": 0.277,
+        "nmi": 0.8414,
+        "pcr": 0.4756
+      },
+      "scaled_scores": {
+        "ari": 0.7046,
+        "asw_batch": 0.7066,
+        "asw_label": 0.185,
+        "cell_cycle_conservation": 0.718,
+        "clisi": 0.9962,
+        "graph_connectivity": 0.9641,
+        "hvg_overlap": 0,
+        "ilisi": 0.1611,
+        "isolated_label_asw": 0.3408,
+        "isolated_label_f1": 0.1014,
+        "kbet": 0.2617,
+        "nmi": 0.8412,
+        "pcr": 0.4756
+      }
+    },
+    "cellxgene_census/hypomap": {
+      "mean_score": 0.3913,
+      "metric_values": {
+        "ari": 0.2436,
+        "asw_batch": 0.8482,
+        "asw_label": 0.5705,
+        "cell_cycle_conservation": 0.6671,
+        "clisi": 1,
+        "graph_connectivity": 0.9156,
+        "hvg_overlap": "NA",
+        "ilisi": 1.9308e-17,
+        "isolated_label_asw": 0.3895,
+        "isolated_label_f1": 0.0046,
+        "kbet": "NA",
+        "nmi": 0.6006,
+        "pcr": 0.2713
+      },
+      "scaled_scores": {
+        "ari": 0.2436,
+        "asw_batch": 0.9067,
+        "asw_label": 0.1749,
+        "cell_cycle_conservation": 0.8946,
+        "clisi": 1,
+        "graph_connectivity": 0.8947,
+        "hvg_overlap": 0,
+        "ilisi": 3.716e-15,
+        "isolated_label_asw": 0.0974,
+        "isolated_label_f1": 0.0029,
+        "kbet": 0,
+        "nmi": 0.6005,
+        "pcr": 0.2713
+      }
+    },
+    "cellxgene_census/immune_cell_atlas": {
+      "mean_score": 0.5168,
+      "metric_values": {
+        "ari": 0.6943,
+        "asw_batch": 0.9137,
+        "asw_label": 0.5447,
+        "cell_cycle_conservation": 0.738,
+        "clisi": 0.9968,
+        "graph_connectivity": 0.984,
+        "hvg_overlap": "NA",
+        "ilisi": 0.1067,
+        "isolated_label_asw": 0.6016,
+        "isolated_label_f1": 0.0236,
+        "kbet": 0.2016,
+        "nmi": 0.7907,
+        "pcr": 0.6121
+      },
+      "scaled_scores": {
+        "ari": 0.6943,
+        "asw_batch": 0.7634,
+        "asw_label": 0.1465,
+        "cell_cycle_conservation": 1.009,
+        "clisi": 0.9849,
+        "graph_connectivity": 0.9825,
+        "hvg_overlap": 0,
+        "ilisi": 0.3168,
+        "isolated_label_asw": 0.2148,
+        "isolated_label_f1": 0.0223,
+        "kbet": 0.1898,
+        "nmi": 0.7906,
+        "pcr": 0.6121
+      }
+    },
+    "cellxgene_census/mouse_pancreas_atlas": {
+      "mean_score": 0.6023,
+      "metric_values": {
+        "ari": 0.86,
+        "asw_batch": 0.885,
+        "asw_label": 0.5541,
+        "cell_cycle_conservation": 0.7189,
+        "clisi": 1,
+        "graph_connectivity": 0.9757,
+        "hvg_overlap": "NA",
+        "ilisi": 0.0443,
+        "isolated_label_asw": 0.7078,
+        "isolated_label_f1": 0.9101,
+        "kbet": "NA",
+        "nmi": 0.8483,
+        "pcr": 0.5076
+      },
+      "scaled_scores": {
+        "ari": 0.86,
+        "asw_batch": 0.9728,
+        "asw_label": 0.1499,
+        "cell_cycle_conservation": 0.8793,
+        "clisi": 1,
+        "graph_connectivity": 0.9665,
+        "hvg_overlap": 0,
+        "ilisi": 0.2387,
+        "isolated_label_asw": 0.4979,
+        "isolated_label_f1": 0.9097,
+        "kbet": 0,
+        "nmi": 0.8482,
+        "pcr": 0.5076
+      }
+    },
+    "cellxgene_census/tabula_sapiens": {
+      "mean_score": 0.4743,
+      "metric_values": {
+        "ari": 0.4372,
+        "asw_batch": 0.8225,
+        "asw_label": 0.5083,
+        "cell_cycle_conservation": 0.7966,
+        "clisi": 0.9993,
+        "graph_connectivity": 0.8966,
+        "hvg_overlap": "NA",
+        "ilisi": 0.0138,
+        "isolated_label_asw": 0.5843,
+        "isolated_label_f1": 0.0837,
+        "kbet": 0.361,
+        "nmi": 0.7561,
+        "pcr": 0.4153
+      },
+      "scaled_scores": {
+        "ari": 0.4372,
+        "asw_batch": 0.6426,
+        "asw_label": 0.1755,
+        "cell_cycle_conservation": 1.0069,
+        "clisi": 0.9884,
+        "graph_connectivity": 0.8967,
+        "hvg_overlap": 0,
+        "ilisi": 0.0979,
+        "isolated_label_asw": 0.3039,
+        "isolated_label_f1": 0.08,
+        "kbet": 0.3732,
+        "nmi": 0.7553,
+        "pcr": 0.4153
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.distributions as dist
+from torch import Tensor
 
 from .abstract import AbstractVampPrior
 
@@ -13,24 +14,27 @@ class VampPrior(AbstractVampPrior):
 
     @property
     def pz_c(self) -> dist.MultivariateNormal:
-        return self._encoder(self.u)
+        return self.qu
 
     @property
     def pz(self) -> dist.Distribution:
         return dist.MixtureSameFamily(
             dist.Categorical(
-                logits=torch.zeros(self.k).to(self.u.device, non_blocking=True)
+                logits=torch.zeros(self.k).to(self.u[0].device, non_blocking=True)
             ),
             self.pz_c,
         )
 
-    def component_distribution(self, z: torch.Tensor) -> dist.Categorical:
+    def component_distribution(self, z: Tensor) -> dist.Categorical:
         return dist.Categorical(logits=self.log_pz_c(z))
 
-    def dkl(self, qz_x: dist.Distribution, z_sample: torch.Tensor) -> torch.Tensor:
+    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:
         log_pz_c = self.log_pz_c(z_sample)
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
+
+    def log_pz(self, z: Tensor, globals: dict[str, Tensor] | None = None) -> Tensor:
+        return self.pz.log_prob(z)
 
 
 class VampPriorUnchained(VampPrior):
@@ -41,7 +45,7 @@ class VampPriorUnchained(VampPrior):
 
     @property
     def pz_c(self) -> dist.MultivariateNormal:
-        mu = self._encoder(self.u).loc
+        mu = self.qu.loc
         L = (
             self.log_L.tril(-1)
             + (self.log_L.diagonal(dim1=-2, dim2=-1)).exp().diag_embed()

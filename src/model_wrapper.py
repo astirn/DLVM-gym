@@ -28,6 +28,7 @@ class ModelWrapper(LightningModule, ABC):
         self._scheduler_params = scheduler_params
         self._validation_metrics = ModuleList(validation_metrics or [])
         self._test_metrics = ModuleList(test_metrics or [])
+        self._test_prefix = "test"
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "validation_metrics":
@@ -43,7 +44,9 @@ class ModelWrapper(LightningModule, ABC):
         super().__setattr__(attr, ModuleList(metrics))
 
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
-        loss = self.model.loss(batch, global_step=self.global_step)
+        loss = self.model.loss(
+            batch, epoch=self.trainer.current_epoch, global_step=self.global_step
+        )
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
 
@@ -56,7 +59,9 @@ class ModelWrapper(LightningModule, ABC):
         self._set_metrics("_validation_metrics", value)
 
     def validation_step(self, batch, batch_idx):
-        loss = self.model.loss(batch, global_step=self.global_step)
+        loss = self.model.loss(
+            batch, epoch=self.trainer.current_epoch, global_step=self.global_step
+        )
         self.log(
             "val/loss",
             loss,
@@ -83,6 +88,14 @@ class ModelWrapper(LightningModule, ABC):
     def test_metrics(self, value: Metric | list[Metric]) -> None:
         self._set_metrics("_test_metrics", value)
 
+    @property
+    def test_prefix(self) -> str:
+        return self._test_prefix
+
+    @test_prefix.setter
+    def test_prefix(self, value: str) -> None:
+        self._test_prefix = value
+
     def test_step(self, batch, batch_idx):
         for metric in self.test_metrics:
             if isinstance(metric, Metric):
@@ -91,7 +104,9 @@ class ModelWrapper(LightningModule, ABC):
     def on_test_epoch_end(self) -> None:
         for metric in self.test_metrics:
             if isinstance(metric, Metric):
-                metric_dict = keymap(lambda x: f"test/{x}", metric.compute())
+                metric_dict = keymap(
+                    lambda x: f"{self.test_prefix}/{x}", metric.compute()
+                )
                 self.log_dict(metric_dict, on_epoch=True)
                 metric.reset()
 
@@ -99,10 +114,7 @@ class ModelWrapper(LightningModule, ABC):
         qz = self.model.qz(**batch)
         z = qz.sample()
         px = self.model.px(z=z, **batch)
-        predictions = {
-            "qz": qz,
-            "px": px,
-        }
+        predictions = {"qz": qz, "px": px}
 
         try:
             predictions["component_distribution"] = (

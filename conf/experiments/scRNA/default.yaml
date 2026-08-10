@@ -16,6 +16,8 @@ data:
   _target_: src.data.scRNA.scRNADataModule
   dataset: ???
   prepare_data_fn: ???
+  val_ratio: 0.1
+  test_ratio: 0.1
   batch_size:
     train: 128
     val: 128
@@ -31,6 +33,8 @@ model:
   _recursive_: false
 
   dim_z: ???
+  encode_covariates: true
+  deeply_inject_covariates: false
 
   decoder_params:
     _target_: src.experiments.scRNA.Decoder
