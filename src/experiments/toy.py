@@ -67,7 +67,7 @@ def plot_results(
     datamodule: GaussianMixtureDataModule, model_wrapper: ModelWrapper, trainer: Trainer
 ):
     prior_name = model_wrapper.model.prior.__class__.__name__
-    fig_path = Path(HydraConfig.get().runtime.output_dir) / f"fig_toy_{prior_name}.pdf"
+    fig_path = Path(HydraConfig.get().runtime.output_dir) / f"{prior_name}.pdf"
 
     dataset = datamodule.data["predict"]
     if not isinstance(dataset, TensorDataset):
