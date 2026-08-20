@@ -18,7 +18,7 @@ class Prior(Module, ABC):
     @abstractmethod  # required for model training
     def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor: ...
 
-    def component_distribution(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor) -> Categorical:
         raise NotImplementedError  # optionally required for ClusteringMetrics
 
     def global_importance_sampling(self, k: int) -> tuple[dict[str, Tensor], Tensor]:

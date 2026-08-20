@@ -17,7 +17,7 @@ class StandardNormalPrior(Prior):
             loc=self.get_buffer("loc"), scale_tril=self.get_buffer("scale_tril")
         )
 
-    def component_distribution(self, z: Tensor) -> dist.Categorical:
+    def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
         return dist.Categorical(probs=torch.ones_like(z[:, :1]))
 
     def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:

@@ -58,7 +58,7 @@ class DirichletVampPrior(VampPrior):
         global_kl = self.dkl_pi()
         return local_kl.mean() + global_kl / self.num_data
 
-    def component_distribution(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         e_log_pi = self.e_log_pi()
         return self.qc(log_pz_c, e_log_pi)

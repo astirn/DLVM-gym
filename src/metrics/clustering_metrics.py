@@ -21,20 +21,20 @@ class ClusteringMetrics(Metric):
             labels = batch[self.label_key]
 
             qz = model.qz(**batch)
-            component_dist = model.prior.component_distribution(z=qz.loc)
-            cluster_assignments = torch.argmax(component_dist.probs, dim=1)
-            cluster_responsibilities = component_dist.probs.max(dim=0).values
-            cluster_labels = labels[torch.argmax(component_dist.probs, dim=0)]
+            cluster_responsibilities = model.prior.cluster_responsibilities(z=qz.loc)
+            cluster_assignments = torch.argmax(cluster_responsibilities.probs, dim=1)
+            max_responsibilities = cluster_responsibilities.probs.max(dim=0).values
+            cluster_labels = labels[torch.argmax(cluster_responsibilities.probs, dim=0)]
 
             self.labels = torch.cat([self.labels, labels])
             self.assignments = torch.cat([self.assignments, cluster_assignments])
 
             if self.max_responsibilities.shape[0] == 0:
-                self.max_responsibilities = cluster_responsibilities
+                self.max_responsibilities = max_responsibilities
                 self.most_probable_labels = cluster_labels
             else:
-                replace = cluster_responsibilities > self.max_responsibilities
-                self.max_responsibilities[replace] = cluster_responsibilities[replace]
+                replace = max_responsibilities > self.max_responsibilities
+                self.max_responsibilities[replace] = max_responsibilities[replace]
                 self.most_probable_labels[replace] = cluster_labels[replace]
 
     def compute(self) -> dict[str, torch.Tensor]:
