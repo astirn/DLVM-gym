@@ -64,43 +64,39 @@ class Decoder(nn.Module):
 
 
 def plot_results(
-    datamodule: GaussianMixtureDataModule, model: ModelWrapper, trainer: Trainer
+    datamodule: GaussianMixtureDataModule, model_wrapper: ModelWrapper, trainer: Trainer
 ):
-    fig_path = Path(HydraConfig.get().runtime.output_dir) / "toy_plot.pdf"
+    prior_name = model_wrapper.model.prior.__class__.__name__
+    fig_path = Path(HydraConfig.get().runtime.output_dir) / f"toy_plot_{prior_name}.pdf"
 
     dataset = datamodule.data["predict"]
     if not isinstance(dataset, TensorDataset):
         raise ValueError("Dataset is not a TensorDataset")
     x = dataset.tensors[0].numpy(force=True)
-    c = dataset.tensors[1].numpy(force=True)
 
-    distributions = trainer.predict(model, datamodule.predict_dataloader())
+    distributions = trainer.predict(model_wrapper, datamodule.predict_dataloader())
     distributions = merge_with(concat_distributions, distributions)
-    cluster_assignments = (
-        distributions["component_distribution"].probs.argmax(axis=1).numpy(force=True)
-    )
+
+    z = distributions["qz"].sample()
+    z_min, z_max = min(z).item(), max(z).item()
+    z_sweep = torch.linspace(z_min, z_max, 1000).unsqueeze(-1).unsqueeze(-1)
+    z_plot = z_sweep.squeeze(-1).squeeze(-1).numpy(force=True)
+
+    cluster_responsibilities = distributions["cluster_responsibilities"].probs
+    cluster_assignments = cluster_responsibilities.argmax(axis=1).numpy(force=True)
+    cluster_usage = cluster_responsibilities.mean(axis=0).numpy(force=True)
+
+    pz = model_wrapper.model.prior.pz
+    if not isinstance(pz, dist.MixtureSameFamily):
+        raise ValueError("Prior is not a MixtureSameFamily distribution")
+    cluster_proportions = pz.mixture_distribution.probs.numpy(force=True)
+    pz = pz.component_distribution.log_prob(z_sweep).exp().numpy(force=True)
 
     fig = plt.figure(figsize=(6, 10))
     gs = GridSpec(4, 2, figure=fig)
 
     ax = fig.add_subplot(gs[:2, :])
-    ax.set_title("True Cluster Assignments")
-    ax.set_xlabel("$x_1$")
-    ax.set_xticks([])
-    ax.set_ylabel("$x_2$")
-    ax.set_yticks([])
-    sns.scatterplot(
-        x=x[:, 0],
-        y=x[:, 1],
-        hue=c,
-        hue_order=range(len(COLOR_PALETTE)),
-        palette=COLOR_PALETTE,
-        ax=ax,
-        legend=False,
-    )
-
-    ax = fig.add_subplot(gs[2:, :])
-    ax.set_title("Predicted Cluster Assignments")
+    ax.set_title("Data colored by cluster assignments")
     ax.set_xlabel("$x_1$")
     ax.set_xticks([])
     ax.set_ylabel("$x_2$")
@@ -115,8 +111,31 @@ def plot_results(
         legend=False,
     )
 
-    plt.tight_layout()
+    ax = fig.add_subplot(gs[2, :])
+    ax.set_title("Cluster components weighted by prior")
+    for i, line_data in enumerate((cluster_proportions * pz).T):
+        sns.lineplot(
+            x=z_plot,
+            y=line_data,
+            ax=ax,
+            color=COLOR_PALETTE[i % len(COLOR_PALETTE)],
+            legend=False,
+        )
+    ax.set_xlabel("$z$")
 
+    ax = fig.add_subplot(gs[3, :])
+    ax.set_title("Cluster components weighted by usage")
+    for i, line_data in enumerate((cluster_usage * pz).T):
+        sns.lineplot(
+            x=z_plot,
+            y=line_data,
+            ax=ax,
+            color=COLOR_PALETTE[i % len(COLOR_PALETTE)],
+            legend=False,
+        )
+    ax.set_xlabel("$z$")
+
+    plt.tight_layout()
     Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(fig_path)
 
@@ -125,9 +144,9 @@ def plot_results(
 
 @hydra.main(version_base=None, config_path="../../conf", config_name="experiments/toy")
 def main(cfg: DictConfig) -> None:
-    datamodule, model, trainer = fit(cfg)
+    datamodule, model_wrapper, trainer = fit(cfg)
     if isinstance(datamodule, GaussianMixtureDataModule):
-        plot_results(datamodule, model, trainer)
+        plot_results(datamodule, model_wrapper, trainer)
     else:
         raise ValueError("Dataset is not a GaussianMixtureDataModule")
 
