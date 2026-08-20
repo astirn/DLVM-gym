@@ -7,6 +7,7 @@ import torch
 import torch.distributions as dist
 import torch.nn as nn
 from hydra.core.hydra_config import HydraConfig
+from hydra.types import RunMode
 from lightning import Trainer
 from matplotlib.gridspec import GridSpec
 from omegaconf import DictConfig
@@ -139,14 +140,14 @@ def plot_results(
     Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(fig_path)
 
-    plt.show()
-
 
 @hydra.main(version_base=None, config_path="../../conf", config_name="experiments/toy")
 def main(cfg: DictConfig) -> None:
     datamodule, model_wrapper, trainer = fit(cfg)
     if isinstance(datamodule, GaussianMixtureDataModule):
         plot_results(datamodule, model_wrapper, trainer)
+        if HydraConfig.get().mode == RunMode.RUN:
+            plt.show()
     else:
         raise ValueError("Dataset is not a GaussianMixtureDataModule")
 
