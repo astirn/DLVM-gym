@@ -16,7 +16,7 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     datamodule.setup()
 
     metrics = valmap(instantiate, cfg.get("metrics", {}))
-    model = ModelWrapper(
+    model_wrapper = ModelWrapper(
         model=instantiate(cfg.model, datamodule=datamodule),
         optimizer_params=dict(cfg.optimizer),
         scheduler_params=(
@@ -33,6 +33,6 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     for logger in trainer.loggers:
         logger.log_hyperparams(hyperparams)
 
-    trainer.fit(model=model, datamodule=datamodule)
+    trainer.fit(model=model_wrapper, datamodule=datamodule)
 
-    return datamodule, model, trainer
+    return datamodule, model_wrapper, trainer
