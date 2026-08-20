@@ -18,7 +18,7 @@ class AbstractVampPrior(Prior, ABC):
         *,
         dim_z: int,
         k: int,
-        encoder: Callable[[Tensor], MultivariateNormal],
+        encoder: torch.nn.Module,
         u_initial: Tensor | list[Tensor],
         u_constraint: CONSTRAINT_FN | list[CONSTRAINT_FN] | None = None,
         **kwargs,
