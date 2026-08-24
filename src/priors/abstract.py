@@ -12,6 +12,16 @@ class Prior(Module, ABC):
         return False
 
     @property
+    def alternating_inference(self) -> bool:
+        return False
+
+    def prior_parameters(self) -> list[Tensor]:
+        return [p for p in self.parameters() if p.requires_grad]
+
+    def empirical_bayes_step(self, z: Tensor) -> Tensor | None:
+        return None
+
+    @property
     @abstractmethod
     def pz(self) -> Distribution: ...
 

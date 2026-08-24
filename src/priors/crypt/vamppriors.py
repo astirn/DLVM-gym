@@ -14,7 +14,7 @@ class VampPrior(AbstractVampPrior):
 
     @property
     def pz_c(self) -> dist.MultivariateNormal:
-        return self.qu
+        return self.qz_u
 
     @property
     def pz(self) -> dist.Distribution:
@@ -47,7 +47,7 @@ class VampPriorUnchained(VampPrior):
 
     @property
     def pz_c(self) -> dist.MultivariateNormal:
-        mu = self.qu.loc
+        mu = self.qz_u.loc
         L = (
             self.log_L.tril(-1)
             + (self.log_L.diagonal(dim1=-2, dim2=-1)).exp().diag_embed()

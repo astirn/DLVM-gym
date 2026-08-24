@@ -1,8 +1,10 @@
 from abc import ABC
 from typing import Any
 
+import torch
 from hydra.utils import instantiate
 from lightning import LightningModule
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from toolz import keymap
 from torch import Tensor
 from torch.nn import ModuleList
@@ -49,6 +51,22 @@ class ModelWrapper(LightningModule, ABC):
         )
         self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
         return loss
+
+    def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
+        if not self.model.prior.alternating_inference:
+            return
+        with torch.no_grad():
+            qz = self.model.qz(**batch)
+            z = qz.sample()
+        prior_loss = self.model.prior.empirical_bayes_step(z)
+        if prior_loss is not None:
+            self.log(
+                "train/prior_loss",
+                prior_loss,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=False,
+            )
 
     @property
     def validation_metrics(self) -> ModuleList:
@@ -125,9 +143,18 @@ class ModelWrapper(LightningModule, ABC):
 
         return predictions
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> OptimizerLRScheduler:
+        if self.model.prior.alternating_inference:
+            prior_param_ids = {id(p) for p in self.model.prior.prior_parameters()}
+            trainable_params = [
+                p
+                for p in self.parameters()
+                if p.requires_grad and id(p) not in prior_param_ids
+            ]
+        else:
+            trainable_params = [p for p in self.parameters() if p.requires_grad]
 
-        optimizer = instantiate(self._optimizer_params, params=self.parameters())
+        optimizer = instantiate(self._optimizer_params, params=trainable_params)
 
         if self._scheduler_params is None:
             return optimizer
