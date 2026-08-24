@@ -1,6 +1,7 @@
 from .dirichlet_vamppriors import DirichletVampPrior, DirichletVampPriorUnchained
 from .dp_vamppriors import DirichletProcessVampPrior, DirichletProcessVampPriorUnchained
 from .vamppriors import VampPrior, VampPriorUnchained
+from .vmm import VampPriorMixtureModel
 
 __all__ = [
     "DirichletVampPrior",
@@ -9,4 +10,5 @@ __all__ = [
     "DirichletProcessVampPriorUnchained",
     "VampPrior",
     "VampPriorUnchained",
+    "VampPriorMixtureModel",
 ]
