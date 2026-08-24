@@ -26,7 +26,7 @@ class VampPriorMixtureModel(AbstractVampPrior):
         self.pi_logits = torch.nn.Parameter(torch.zeros(self.k))
         self._precision_params = torch.nn.Parameter(
             torch.zeros(self.k, self.dim_z, self.dim_z)
-            + softplus_inverse(torch.ones(self.k, self.dim_z)).sqrt().diag_embed()
+            + softplus_inverse(torch.ones(self.k, self.dim_z)).diag_embed()
         )
 
         self.register_buffer(
