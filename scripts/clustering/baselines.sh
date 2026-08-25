@@ -21,13 +21,13 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     seed=$SEED
 
 # VMM (Stirn & Knowles, 2025)
-NUM_DATA=128,256,512  # Stirn & Knowles (2025) artificially set this to scale influence of prior
+NUM_DATA="128,256,512,1024,???"  # Stirn & Knowles (2025) artificially set this to scale influence of prior
 PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/clustering/${DATASET} --multirun \
     hydra.launcher.n_jobs=$N_JOBS \
     paths.log_dir='logs/${experiment_name}/'"$SCRIPT_NAME" \
     priors@model.prior_params=crypt/vmm \
-    prior@model.prior_params.num_data=$NUM_DATA \
-    loggers.wandb.name='${model.prior_params.name}' \
+    model.prior_params.num_data=$NUM_DATA \
+    loggers.wandb.name='${model.prior_params.name}-${model.prior_params.num_data}' \
     loggers.wandb.group='${experiment_name}/'"$SCRIPT_NAME" \
     loggers.wandb.mode=$WANDB_MODE \
     loggers.wandb.job_type=baseline \
