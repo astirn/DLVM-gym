@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Categorical, Distribution
@@ -15,11 +16,11 @@ class Prior(Module, ABC):
     def alternating_inference(self) -> bool:
         return False
 
-    def prior_parameters(self) -> list[Tensor]:
-        return [p for p in self.parameters() if p.requires_grad]
+    def empirical_bayes_params(self) -> list[Tensor]:
+        raise NotImplementedError  # required when alternating_inference is True
 
-    def empirical_bayes_step(self, z: Tensor) -> Tensor | None:
-        return None
+    def empirical_bayes_loss(self, batch: dict[str, Any]) -> Tensor:
+        raise NotImplementedError  # required when alternating_inference is True
 
     @property
     @abstractmethod

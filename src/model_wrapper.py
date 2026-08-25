@@ -4,7 +4,7 @@ from typing import Any
 import torch
 from hydra.utils import instantiate
 from lightning import LightningModule
-from lightning.pytorch.utilities.types import OptimizerLRScheduler
+from lightning.pytorch.utilities.types import LRSchedulerPLType, OptimizerLRScheduler
 from toolz import keymap
 from torch import Tensor
 from torch.nn import ModuleList
@@ -25,6 +25,8 @@ class ModelWrapper(LightningModule, ABC):
         **kwargs,
     ) -> None:
         LightningModule.__init__(self)
+        self.automatic_optimization = False
+
         self.model = model
         self._optimizer_params = optimizer_params
         self._scheduler_params = scheduler_params
@@ -45,28 +47,72 @@ class ModelWrapper(LightningModule, ABC):
         metrics = [value] if isinstance(value, Metric) else value
         super().__setattr__(attr, ModuleList(metrics))
 
-    def training_step(self, batch: dict[str, Any], batch_idx: int) -> Tensor:
+    @property
+    def model_params(self) -> list[Tensor]:
+        if self.model.prior.alternating_inference:
+            prior_param_ids = {id(p) for p in self.prior_params}
+            return [
+                p
+                for p in self.model.parameters()
+                if p.requires_grad and id(p) not in prior_param_ids
+            ]
+
+        return [p for p in self.model.parameters() if p.requires_grad]
+
+    @property
+    def prior_params(self) -> list[Tensor]:
+        return self.model.prior.empirical_bayes_params()
+
+    def training_step(self, batch: dict[str, Any], batch_idx: int) -> None:
+        optimizers = self.optimizers()
+        optimizer = optimizers[0] if isinstance(optimizers, list) else optimizers
+
         loss = self.model.loss(
             batch, epoch=self.trainer.current_epoch, global_step=self.global_step
         )
-        self.log("train/loss", loss, on_epoch=True, on_step=False, prog_bar=True)
-        return loss
+        grads = torch.autograd.grad(loss, self.model_params, allow_unused=True)
+
+        optimizer.zero_grad(set_to_none=True)
+        for p, g in zip(self.model_params, grads):
+            if g is not None:
+                p.grad = g
+        optimizer.step()
+
+        self.log(
+            "train/loss", loss.detach(), on_epoch=True, on_step=False, prog_bar=True
+        )
 
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
-        if not self.model.prior.alternating_inference:
-            return
-        with torch.no_grad():
-            qz = self.model.qz(**batch)
-            z = qz.sample()
-        prior_loss = self.model.prior.empirical_bayes_step(z)
-        if prior_loss is not None:
+        if self.model.prior.alternating_inference:
+
+            optimizers = self.optimizers()
+            if not isinstance(optimizers, list):
+                raise ValueError(
+                    "Optimizers must be a list when alternating inference."
+                )
+            optimizer = optimizers[1]
+
+            loss = self.model.prior.empirical_bayes_loss(batch)
+            grads = torch.autograd.grad(loss, self.prior_params, allow_unused=True)
+
+            optimizer.zero_grad(set_to_none=True)
+            for p, g in zip(self.prior_params, grads):
+                if g is not None:
+                    p.grad = g
+            optimizer.step()
+
             self.log(
                 "train/prior_loss",
-                prior_loss,
+                loss.detach(),
                 on_epoch=True,
                 on_step=False,
                 prog_bar=False,
             )
+
+        schedulers = self.lr_schedulers()
+        if not isinstance(schedulers, list):
+            schedulers = [schedulers]
+        [sch.step() for sch in schedulers if isinstance(sch, LRSchedulerPLType)]
 
     @property
     def validation_metrics(self) -> ModuleList:
@@ -145,25 +191,39 @@ class ModelWrapper(LightningModule, ABC):
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
         if self.model.prior.alternating_inference:
-            prior_param_ids = {id(p) for p in self.model.prior.prior_parameters()}
-            trainable_params = [
-                p
-                for p in self.parameters()
-                if p.requires_grad and id(p) not in prior_param_ids
-            ]
-        else:
-            trainable_params = [p for p in self.parameters() if p.requires_grad]
+            optimizer1 = instantiate(self._optimizer_params, params=self.model_params)
+            optimizer2 = instantiate(self._optimizer_params, params=self.prior_params)
 
-        optimizer = instantiate(self._optimizer_params, params=trainable_params)
+            if self._scheduler_params is not None:
+                scheduler1 = instantiate(self._scheduler_params, optimizer=optimizer1)
+                scheduler2 = instantiate(self._scheduler_params, optimizer=optimizer2)
 
-        if self._scheduler_params is None:
-            return optimizer
+                return {
+                    "optimizer": optimizer1,
+                    "lr_scheduler": {
+                        "scheduler": scheduler1,
+                        "interval": "step",
+                    },
+                }, {
+                    "optimizer": optimizer2,
+                    "lr_scheduler": {
+                        "scheduler": scheduler2,
+                        "interval": "step",
+                    },
+                }
 
-        scheduler = instantiate(self._scheduler_params, optimizer=optimizer)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",
-            },
-        }
+            return optimizer1, optimizer2
+
+        optimizer = instantiate(self._optimizer_params, params=self.model_params)
+
+        if self._scheduler_params is not None:
+            scheduler = instantiate(self._scheduler_params, optimizer=optimizer)
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "step",
+                },
+            }
+
+        return optimizer

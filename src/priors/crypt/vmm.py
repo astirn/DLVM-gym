@@ -1,4 +1,5 @@
 import math
+from typing import Any
 
 import torch
 import torch.distributions as dist
@@ -17,7 +18,6 @@ class VampPriorMixtureModel(AbstractVampPrior):
         self,
         *,
         concentration: float = 1.0,
-        learning_rate: float = 1e-3,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -36,16 +36,11 @@ class VampPriorMixtureModel(AbstractVampPrior):
             / ((self.dim_z + 2) ** 0.5),
         )
 
-        if self.alternating_inference:
-            self.inference_optimizer = torch.optim.Adam(
-                self.prior_parameters(), lr=learning_rate
-            )
-
     @property
     def alternating_inference(self) -> bool:
         return True
 
-    def prior_parameters(self) -> list[Tensor]:
+    def empirical_bayes_params(self) -> list[Tensor]:
         return [
             p
             for name, p in self.named_parameters()
@@ -90,7 +85,10 @@ class VampPriorMixtureModel(AbstractVampPrior):
         precision = self.precision_cholesky @ self.precision_cholesky.mT
         return prior_precision.log_prob(precision).sum()
 
-    def empirical_bayes_step(self, z: Tensor) -> Tensor | None:
+    def empirical_bayes_loss(self, batch: dict[str, Any]) -> Tensor:
+        with torch.no_grad():
+            z = self._encoder(**batch).sample()
+
         log_prob_z_c = self.log_pz_c(z)
         log_prob_c = F.log_softmax(self.pi_logits, dim=-1)
         qc = F.softmax(log_prob_z_c + log_prob_c, dim=-1)
@@ -103,14 +101,7 @@ class VampPriorMixtureModel(AbstractVampPrior):
         )
         loss = local_loss - global_loss / z.shape[0]
 
-        params = self.prior_parameters()
-        grads = torch.autograd.grad(loss, params, allow_unused=True)
-        self.inference_optimizer.zero_grad(set_to_none=True)
-        for p, g in zip(params, grads):
-            if g is not None:
-                p.grad = g
-        self.inference_optimizer.step()
-        return loss.detach()
+        return loss
 
     @property
     def pz_c(self) -> dist.MultivariateNormal:
