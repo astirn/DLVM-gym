@@ -50,11 +50,10 @@ class ModelWrapper(LightningModule, ABC):
     @property
     def model_params(self) -> list[Tensor]:
         if self.model.prior.alternating_inference:
-            prior_param_ids = {id(p) for p in self.prior_params}
             return [
                 p
-                for p in self.model.parameters()
-                if p.requires_grad and id(p) not in prior_param_ids
+                for name, p in self.model.named_parameters()
+                if p.requires_grad and not name.startswith("prior.")
             ]
 
         return [p for p in self.model.parameters() if p.requires_grad]
@@ -66,14 +65,15 @@ class ModelWrapper(LightningModule, ABC):
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> None:
         optimizers = self.optimizers()
         optimizer = optimizers[0] if isinstance(optimizers, list) else optimizers
+        params = self.model_params
 
         loss = self.model.loss(
             batch, epoch=self.trainer.current_epoch, global_step=self.global_step
         )
-        grads = torch.autograd.grad(loss, self.model_params, allow_unused=True)
+        grads = torch.autograd.grad(loss, params, allow_unused=True)
 
         optimizer.zero_grad(set_to_none=True)
-        for p, g in zip(self.model_params, grads):
+        for p, g in zip(params, grads):
             if g is not None:
                 p.grad = g
         optimizer.step()
@@ -91,12 +91,13 @@ class ModelWrapper(LightningModule, ABC):
                     "Optimizers must be a list when alternating inference."
                 )
             optimizer = optimizers[1]
+            params = self.prior_params
 
             loss = self.model.prior.empirical_bayes_loss(batch)
-            grads = torch.autograd.grad(loss, self.prior_params, allow_unused=True)
+            grads = torch.autograd.grad(loss, params, allow_unused=True)
 
             optimizer.zero_grad(set_to_none=True)
-            for p, g in zip(self.prior_params, grads):
+            for p, g in zip(params, grads):
                 if g is not None:
                     p.grad = g
             optimizer.step()
