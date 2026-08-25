@@ -1,6 +1,6 @@
 from hydra.utils import instantiate
 from lightning import Trainer, seed_everything
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from toolz import valmap
 
 from src.data import BaseDataModule
@@ -17,7 +17,8 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
 
     metrics = valmap(instantiate, cfg.get("metrics", {}))
     if cfg.model.prior_params.get("num_data", "???") == "???":
-        cfg.model.prior_params["num_data"] = datamodule.num_data
+        with open_dict(cfg):
+            cfg.model.prior_params["num_data"] = datamodule.num_data
     model_wrapper = ModelWrapper(
         model=instantiate(cfg.model, datamodule=datamodule),
         optimizer_params=dict(cfg.optimizer),
