@@ -17,14 +17,14 @@ class DirichletProcessVampPrior(VampPrior):
     def __init__(
         self,
         *,
-        num_data: int,
         concentration: float,
+        num_data: int,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.num_data = num_data
         self.concentration = concentration
+        self.num_data = num_data
 
         log_gamma_init = torch.zeros(self.k, 2)
         log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
