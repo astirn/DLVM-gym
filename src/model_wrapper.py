@@ -117,8 +117,8 @@ class ModelWrapper(LightningModule, ABC):
         predictions = {"qz": qz, "px": px}
 
         try:
-            predictions["component_distribution"] = (
-                self.model.prior.component_distribution(z=z)
+            predictions["cluster_responsibilities"] = (
+                self.model.prior.cluster_responsibilities(z=z)
             )
         except NotImplementedError:
             pass

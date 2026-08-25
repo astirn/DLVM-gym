@@ -25,7 +25,7 @@ class VampPrior(AbstractVampPrior):
             self.pz_c,
         )
 
-    def component_distribution(self, z: Tensor) -> dist.Categorical:
+    def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
         return dist.Categorical(logits=self.log_pz_c(z))
 
     def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:

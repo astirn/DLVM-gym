@@ -113,7 +113,7 @@ class DirichletProcessVampPrior(VampPrior):
         global_kl = self.dkl_v()
         return local_kl.mean() + global_kl / self.num_data
 
-    def component_distribution(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         e_log_v, e_log_vm1 = self.e_log_v_and_e_log_vm1()
         qc_z = self.qc(log_pz_c, e_log_v, e_log_vm1)
