@@ -16,6 +16,8 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     datamodule.setup()
 
     metrics = valmap(instantiate, cfg.get("metrics", {}))
+    if cfg.model.prior_params.get("num_data", "???") == "???":
+        cfg.model.prior_params["num_data"] = datamodule.num_data
     model_wrapper = ModelWrapper(
         model=instantiate(cfg.model, datamodule=datamodule),
         optimizer_params=dict(cfg.optimizer),

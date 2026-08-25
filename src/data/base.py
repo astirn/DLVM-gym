@@ -62,6 +62,10 @@ class BaseDataModule(LightningDataModule, ABC):
 
         self.batch_size_per_device = {s: self.batch_size[s] for s in self.data}
 
+    @property
+    @abstractmethod
+    def num_data(self) -> int: ...
+
     @abstractmethod
     def prepare_data(self) -> None: ...
 

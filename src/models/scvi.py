@@ -78,7 +78,6 @@ class scVI(DeepLatentVariableModel):
         self.prior: Prior = instantiate(
             prior_params,
             encoder=self.encoder,
-            num_data=datamodule.num_cells,
             u_initial=u_initial,
             **kwargs,
         )

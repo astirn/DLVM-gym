@@ -119,7 +119,7 @@ class scRNADataModule(BaseDataModule):
         return self._pca
 
     @property
-    def num_cells(self) -> int:
+    def num_data(self) -> int:
         return self.counts.shape[0]  # type: ignore[attr-defined]
 
     @property
@@ -151,16 +151,16 @@ class scRNADataModule(BaseDataModule):
         predict = stage == "predict" or stage is None
 
         rng = np.random.default_rng(self.seed)
-        idx = rng.permutation(self.num_cells)
+        idx = rng.permutation(self.num_data)
 
-        n_val = int(self.num_cells * self.val_ratio)
-        n_test = int(self.num_cells * self.test_ratio)
-        n_train = self.num_cells - n_val - n_test
+        n_val = int(self.num_data * self.val_ratio)
+        n_test = int(self.num_data * self.test_ratio)
+        n_train = self.num_data - n_val - n_test
 
         train_idx = idx[:n_train]
         val_idx = idx[n_train : n_train + n_val]
         test_idx = idx[n_train + n_val :]
-        predict_idx = np.arange(self.num_cells)
+        predict_idx = np.arange(self.num_data)
 
         if fit and self.data["train"] is None:
             self.data["train"] = scRNADataset(

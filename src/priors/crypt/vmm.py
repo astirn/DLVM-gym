@@ -17,11 +17,13 @@ class VampPriorMixtureModel(AbstractVampPrior):
     def __init__(
         self,
         *,
-        concentration: float = 1.0,
+        concentration: float,
+        num_data: int,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.concentration = concentration
+        self.num_data = num_data
 
         self.pi_logits = torch.nn.Parameter(torch.zeros(self.k))
         self._precision_params = torch.nn.Parameter(
@@ -99,7 +101,7 @@ class VampPriorMixtureModel(AbstractVampPrior):
             + self.log_prior_prob_mu()
             + self.log_prior_prob_precision()
         )
-        loss = local_loss - global_loss / z.shape[0]
+        loss = local_loss - global_loss / self.num_data
 
         return loss
 
