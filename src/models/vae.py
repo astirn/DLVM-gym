@@ -42,9 +42,9 @@ class VariationalAutoencoder(DeepLatentVariableModel):
                     stratification_key=(
                         "c" if u_initial_strategy == "stratified_data" else None
                     ),
-                )["x"]
+                )
             elif u_initial_strategy == "random":
-                u_initial = torch.randn(prior_params["k"], self.dim_x)
+                u_initial = {"x": torch.randn(prior_params["k"], self.dim_x)}
             else:
                 raise ValueError(
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
@@ -55,6 +55,7 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         self.prior: Prior = instantiate(
             prior_params,
             encoder=self.encoder,
+            q=self.qz,
             u_initial=u_initial,
             **kwargs,
         )

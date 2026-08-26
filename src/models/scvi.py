@@ -50,7 +50,7 @@ class scVI(DeepLatentVariableModel):
 
         if "crypt" in prior_params["_target_"]:
             if u_initial_strategy in ["data", "stratified_data"]:
-                u_sample = sample_u_initial(
+                u_initial = sample_u_initial(
                     datamodule,
                     k=prior_params["k"],
                     u_keys=["x", "s"],
@@ -58,19 +58,26 @@ class scVI(DeepLatentVariableModel):
                         "c" if u_initial_strategy == "stratified_data" else None
                     ),
                 )
-                u_x = u_sample["x"].log1p()
-                u_s = F.one_hot(u_sample["s"], num_classes=self.num_batches).float()
+                u_initial["x"] = u_initial["x"].log1p()
+                u_initial["s"] = F.one_hot(
+                    u_initial["s"], num_classes=self.num_batches
+                ).float()
 
             elif u_initial_strategy == "random":
-                u_x = torch.randn(prior_params["k"], self.num_genes)
-                u_s = F.softmax(torch.randn(prior_params["k"], self.num_batches), dim=1)
+                u_initial = {
+                    "x": F.softplus(torch.randn(prior_params["k"], self.num_genes)),
+                    "s": F.softmax(
+                        torch.randn(prior_params["k"], self.num_batches), dim=1
+                    ),
+                }
 
             else:
                 raise ValueError(
                     f"Invalid u_initial for {prior_params['_target_']}: {u_initial_strategy}"
                 )
 
-            u_initial = [u_x, u_s] if self.encode_covariates else [u_x]
+            if not self.encode_covariates:
+                u_initial.pop("s")
 
         else:
             u_initial = None
@@ -78,13 +85,16 @@ class scVI(DeepLatentVariableModel):
         self.prior: Prior = instantiate(
             prior_params,
             encoder=self.encoder,
+            q=self.qz,
             u_initial=u_initial,
             **kwargs,
         )
 
-    def qz(self, *, x: Tensor, s: Tensor, **kwargs) -> MultivariateNormal:
+    def qz(self, *, x: Tensor, s: Tensor | None = None, **kwargs) -> MultivariateNormal:
         x = x.log1p()
         if self.encode_covariates:
+            if s is None:
+                raise ValueError("s must be provided when encode_covariates is True")
             s = F.one_hot(s, num_classes=self.num_batches).float()
             return self.encoder(x, s)
         return self.encoder(x)

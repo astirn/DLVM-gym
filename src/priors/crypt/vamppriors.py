@@ -18,11 +18,10 @@ class VampPrior(AbstractVampPrior):
 
     @property
     def pz(self) -> dist.Distribution:
+        pz_c = self.pz_c
         return dist.MixtureSameFamily(
-            dist.Categorical(
-                logits=torch.zeros(self.k).to(self.u[0].device, non_blocking=True)
-            ),
-            self.pz_c,
+            dist.Categorical(logits=torch.zeros(self.k, device=pz_c.loc.device)),
+            pz_c,
         )
 
     def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
