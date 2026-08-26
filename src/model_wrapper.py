@@ -1,10 +1,11 @@
 from abc import ABC
+from collections.abc import Sequence
 from typing import Any
 
 import torch
 from hydra.utils import instantiate
 from lightning import LightningModule
-from lightning.pytorch.utilities.types import LRSchedulerPLType, OptimizerLRScheduler
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from toolz import keymap
 from torch import Tensor
 from torch.nn import ModuleList
@@ -20,6 +21,8 @@ class ModelWrapper(LightningModule, ABC):
         *,
         optimizer_params: dict[str, Any] | None = None,
         scheduler_params: dict[str, Any] | None = None,
+        gradient_clip_val: float | None = None,
+        gradient_clip_algorithm: str = "norm",
         validation_metrics: list[Metric] | None = None,
         test_metrics: list[Metric] | None = None,
         **kwargs,
@@ -30,6 +33,8 @@ class ModelWrapper(LightningModule, ABC):
         self.model = model
         self._optimizer_params = optimizer_params
         self._scheduler_params = scheduler_params
+        self._gradient_clip_val = gradient_clip_val
+        self._gradient_clip_algorithm = gradient_clip_algorithm
         self._validation_metrics = ModuleList(validation_metrics or [])
         self._test_metrics = ModuleList(test_metrics or [])
         self._test_prefix = "test"
@@ -62,9 +67,24 @@ class ModelWrapper(LightningModule, ABC):
     def prior_params(self) -> list[Tensor]:
         return self.model.prior.empirical_bayes_params()
 
+    def _clip_gradients_if_configured(self, optimizer: Any) -> None:
+        clip_val = self._gradient_clip_val
+        if clip_val is None or clip_val <= 0:
+            return
+
+        torch_optimizer = (
+            optimizer.optimizer if hasattr(optimizer, "optimizer") else optimizer
+        )
+
+        self.clip_gradients(
+            torch_optimizer,
+            gradient_clip_val=clip_val,
+            gradient_clip_algorithm=self._gradient_clip_algorithm,
+        )
+
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> None:
         optimizers = self.optimizers()
-        optimizer = optimizers[0] if isinstance(optimizers, list) else optimizers
+        optimizer = optimizers[0] if isinstance(optimizers, Sequence) else optimizers
         params = self.model_params
 
         loss = self.model.loss(
@@ -76,6 +96,7 @@ class ModelWrapper(LightningModule, ABC):
         for p, g in zip(params, grads):
             if g is not None:
                 p.grad = g
+        self._clip_gradients_if_configured(optimizer)
         optimizer.step()
 
         self.log(
@@ -86,9 +107,9 @@ class ModelWrapper(LightningModule, ABC):
         if self.model.prior.alternating_inference:
 
             optimizers = self.optimizers()
-            if not isinstance(optimizers, list):
+            if not isinstance(optimizers, Sequence):
                 raise ValueError(
-                    "Optimizers must be a list when alternating inference."
+                    "Optimizers must be an ordered sequence when alternating inference."
                 )
             optimizer = optimizers[1]
             params = self.prior_params
@@ -100,6 +121,7 @@ class ModelWrapper(LightningModule, ABC):
             for p, g in zip(params, grads):
                 if g is not None:
                     p.grad = g
+            self._clip_gradients_if_configured(optimizer)
             optimizer.step()
 
             self.log(
@@ -111,9 +133,18 @@ class ModelWrapper(LightningModule, ABC):
             )
 
         schedulers = self.lr_schedulers()
-        if not isinstance(schedulers, list):
-            schedulers = [schedulers]
-        [sch.step() for sch in schedulers if isinstance(sch, LRSchedulerPLType)]
+        if schedulers is None:
+            return
+
+        if isinstance(schedulers, Sequence):
+            scheduler_list = list(schedulers)
+        else:
+            scheduler_list = [schedulers]
+
+        for scheduler in scheduler_list:
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                raise NotImplementedError
+            scheduler.step()
 
     @property
     def validation_metrics(self) -> ModuleList:
@@ -199,21 +230,24 @@ class ModelWrapper(LightningModule, ABC):
                 scheduler1 = instantiate(self._scheduler_params, optimizer=optimizer1)
                 scheduler2 = instantiate(self._scheduler_params, optimizer=optimizer2)
 
-                return {
-                    "optimizer": optimizer1,
-                    "lr_scheduler": {
-                        "scheduler": scheduler1,
-                        "interval": "step",
+                return [
+                    {
+                        "optimizer": optimizer1,
+                        "lr_scheduler": {
+                            "scheduler": scheduler1,
+                            "interval": "step",
+                        },
                     },
-                }, {
-                    "optimizer": optimizer2,
-                    "lr_scheduler": {
-                        "scheduler": scheduler2,
-                        "interval": "step",
+                    {
+                        "optimizer": optimizer2,
+                        "lr_scheduler": {
+                            "scheduler": scheduler2,
+                            "interval": "step",
+                        },
                     },
-                }
+                ]
 
-            return optimizer1, optimizer2
+            return [optimizer1, optimizer2]
 
         optimizer = instantiate(self._optimizer_params, params=self.model_params)
 

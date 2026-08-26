@@ -60,8 +60,10 @@ optimizer:
   lr: 1e-3
   weight_decay: 0.0
 
-trainer:
+model_wrapper:
   gradient_clip_val: 1.0
   gradient_clip_algorithm: norm
+
+trainer:
   max_steps: 20000
   val_check_interval: 100

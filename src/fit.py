@@ -25,6 +25,7 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
         scheduler_params=(
             dict(cfg.scheduler) if cfg.get("scheduler") is not None else None
         ),
+        **dict(cfg.get("model_wrapper", {})),
         **metrics,
     )
 
