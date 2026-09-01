@@ -21,7 +21,7 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     seed=$SEED
 
 # VMM (Stirn & Knowles, 2025)
-NUM_DATA="128,256,512,1024,2048,4096,8192,16384,32768,???"  # Stirn & Knowles (2025) artificially set this to scale influence of prior
+NUM_DATA="8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,???"  # Stirn & Knowles (2025) artificially set this to scale influence of prior
 U_INITIAL_STRATEGY="data,stratified_data,random"
 PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/clustering/${DATASET} --multirun \
     hydra.launcher.n_jobs=$N_JOBS \
