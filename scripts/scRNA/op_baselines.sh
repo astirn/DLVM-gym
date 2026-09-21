@@ -22,13 +22,13 @@ PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATA
     seed=$SEED
 
 # VMM (Stirn & Knowles, 2025)
-NUM_DATA="128,256,512,1024,???"  # Stirn & Knowles (2025) artificially set this to scale influence of prior
 PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATASET} --multirun \
     hydra.launcher.n_jobs=$N_JOBS \
     model.encode_covariates=true \
     paths.log_dir='logs/${experiment_name}/'"$SCRIPT_NAME" \
     priors@model.prior_params=crypt/vmm \
-    model.prior_params.num_data=$NUM_DATA \
+    model.prior_params.num_data='${data.batch_size.train}' \
+    model.u_initial_strategy=data \
     loggers.wandb.name='${model.prior_params.name}-${model.prior_params.num_data}' \
     loggers.wandb.group='${experiment_name}/'"$SCRIPT_NAME" \
     loggers.wandb.mode=$WANDB_MODE \
