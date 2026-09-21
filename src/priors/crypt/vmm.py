@@ -130,7 +130,7 @@ class VampPriorMixtureModel(AbstractVampPrior):
 
     def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
         return dist.Categorical(
-            logits=self.log_pz_c(z) + F.log_softmax(self.pi_logits, dim=-1)
+            logits=self.log_pz_c(z, self.qz_u) + F.log_softmax(self.pi_logits, dim=-1)
         )
 
     def log_pz(
