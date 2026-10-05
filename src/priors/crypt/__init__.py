@@ -1,14 +1,14 @@
-from .dirichlet_vamppriors import DirichletVampPrior, DirichletVampPriorUnchained
-from .dp_vamppriors import DirichletProcessVampPrior, DirichletProcessVampPriorUnchained
-from .vamppriors import VampPrior, VampPriorUnchained
+from .dirichlet_vamppriors import DirichletVampPrior, DirichletVampPriorUnleashed
+from .dp_vamppriors import DirichletProcessVampPrior, DirichletProcessVampPriorUnleashed
+from .vamppriors import VampPrior, VampPriorUnleashed
 from .vmm import VampPriorMixtureModel
 
 __all__ = [
     "DirichletVampPrior",
-    "DirichletVampPriorUnchained",
+    "DirichletVampPriorUnleashed",
     "DirichletProcessVampPrior",
-    "DirichletProcessVampPriorUnchained",
+    "DirichletProcessVampPriorUnleashed",
     "VampPrior",
-    "VampPriorUnchained",
+    "VampPriorUnleashed",
     "VampPriorMixtureModel",
 ]

@@ -38,7 +38,7 @@ class VampPrior(AbstractVampPrior):
         return self.pz.log_prob(z)
 
 
-class VampPriorUnchained(VampPrior):
+class VampPriorUnleashed(VampPrior):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

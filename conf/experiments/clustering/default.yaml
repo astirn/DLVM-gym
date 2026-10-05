@@ -3,7 +3,7 @@
 defaults:
   - /callbacks@callbacks: default
   - /loggers@loggers: default
-  - /priors@model.prior_params: crypt/dp_vampprior_unchained
+  - /priors@model.prior_params: crypt/dp_vampprior_unleashed
   - /hydra
   - /paths
   - /trainer@trainer: step_based

@@ -2,7 +2,7 @@ version: v2
 description: Experiment pipeline
 budget: ai1/octo.ai
 tasks:
-  - name: vampprior_unchained
+  - name: vampprior_unleashed
     image:
       beaker: astirn/base-dev
     command: [bash, -c]

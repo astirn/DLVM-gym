@@ -5,7 +5,7 @@ wandb:
   log_model: false
   mode: disabled
   entity: octo-ai
-  project: VampPrior-Unchained
+  project: VampPrior-Unleashed
   group: ${experiment_name}
   job_type: fit
   tags: []
