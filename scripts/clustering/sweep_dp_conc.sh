@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/../arg_parser.sh"
 parse_args "Sweep DP concentration hyperparameters for a clustering dataset." "$@"
 
 PRIOR="crypt/dp_vampprior,crypt/dp_vampprior_unchained"
-CONCENTRATION="0.1,0.5,0.75,1.0,2.0,4.0,10.0"
+CONCENTRATION="0.1,0.5,0.75,1.0,2.0,4.0,10.0,11.0,100.0"
 U_INITIAL_STRATEGY="data,stratified_data,random"
 SEED="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
 

@@ -62,6 +62,7 @@ tasks:
       preemptible: false
 
     constraints:
-      cluster: [ai1/octo.ai-aws-g6e]
+      cluster: [ai1/octo.ai-aws-g6e]  # L40
+      # cluster: [ai1/octo.ai-aws-p5en]  # H200
 
     timeout: 720h
