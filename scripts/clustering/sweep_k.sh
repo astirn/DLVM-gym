@@ -11,7 +11,7 @@ K="1,10,20,40,60,80,100"
 U_INITIAL_STRATEGY="data,stratified_data,random"
 SEED="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
 
-PYTHONPATH=. uv run python src/experiments/clustering_v2.py -cn experiments/clustering/${DATASET} --multirun \
+PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/clustering/${DATASET} --multirun \
     hydra.launcher.n_jobs=$N_JOBS \
     model.prior_params.k=$K \
     model.u_initial_strategy=$U_INITIAL_STRATEGY \
