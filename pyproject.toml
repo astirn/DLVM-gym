@@ -1,7 +1,7 @@
 [project]
-name = "vampprior-paradox"
+name = "VampPrior-Unleashed"
 version = "0.1.0"
-description = "Add your description here"
+description = "VampPrior-Unleashed Code Submission"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
