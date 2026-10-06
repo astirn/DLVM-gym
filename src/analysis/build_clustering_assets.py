@@ -17,9 +17,9 @@ from .utils import get_relevant_runs
 DATASETS = ["MNIST", "FashionMNIST"]
 PRIOR_ORDER = [
     "VampPrior",
-    "VampPriorUnchained",
+    "VampPriorUnleashed",
     "DPVampPrior",
-    "DPVampPriorUnchained",
+    "DPVampPriorUnleashed",
     "VMM",
 ]
 PRIOR_COLORS = dict(
@@ -33,9 +33,9 @@ STAR_STYLE = {"marker": "*", "s": 100, "edgecolor": "k"}
 PRIOR_HYPER_PARAMS = {
     "StandardNormal": None,
     "VampPrior": ["Init.", "K"],
-    "VampPriorUnchained": ["Init.", "K"],
+    "VampPriorUnleashed": ["Init.", "K"],
     "DPVampPrior": ["Init.", "$\\alpha$"],
-    "DPVampPriorUnchained": ["Init.", "$\\alpha$"],
+    "DPVampPriorUnleashed": ["Init.", "$\\alpha$"],
     "VMM": ["Init.", "num_data"],
 }
 
@@ -548,10 +548,10 @@ def pareto_analysis(n_boot: int):
         df_sn = df_baselines[df_baselines["Prior"] == "StandardNormal"]
         df_vmm = df_baselines[df_baselines["Prior"] == "VMM"]
 
-        # VampPrior and VampPriorUnchained
+        # VampPrior and VampPriorUnleashed
         df_k = pd.read_pickle(ASSETS / f"Clustering/{dataset}/sweep_k.pkl")
 
-        # DPVampPrior and DPVampPriorUnchained
+        # DPVampPrior and DPVampPriorUnleashed
         df_alpha = pd.read_pickle(ASSETS / f"Clustering/{dataset}/sweep_dp_conc.pkl")
 
         # Combine all priors into a single DataFrame for plotting
@@ -559,11 +559,11 @@ def pareto_analysis(n_boot: int):
         df = df[
             (df["Prior"] == "StandardNormal")
             | (
-                df["Prior"].isin(["VampPrior", "VampPriorUnchained"])
+                df["Prior"].isin(["VampPrior", "VampPriorUnleashed"])
                 & df["Init."].isin(["data", "random"])
             )
             | (
-                df["Prior"].isin(["DPVampPrior", "DPVampPriorUnchained"])
+                df["Prior"].isin(["DPVampPrior", "DPVampPriorUnleashed"])
                 & df["Init."].isin(["stratified_data", "random"])
                 & df["$\\alpha$"].isin(
                     [0.1, 0.5, 0.75, 1.0, 2.0, 4.0, 10.0, 11.0, 100.0]

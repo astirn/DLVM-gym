@@ -19,7 +19,7 @@ DATASETS = {
 }
 PRIOR_ORDER = [
     "VampPrior",
-    "DPVampPriorUnchained",
+    "DPVampPriorUnleashed",
     "VMM",
 ]
 
@@ -225,7 +225,7 @@ def build_table():
         mean_baselines = df_baselines.groupby(common_index).mean()
         std_baselines = df_baselines.groupby(common_index).std()
 
-        # DPVampPriorUnchained
+        # DPVampPriorUnleashed
         df_alpha = pd.read_pickle(ASSETS / f"scRNA/{dataset}/sweep_dp_conc.pkl")
         df_alpha["Dataset"] = DATASETS[dataset]
         df_alpha.set_index(common_index + ["$\\alpha$"], inplace=True)
