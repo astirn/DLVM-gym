@@ -10,6 +10,7 @@ dependencies = [
     "ipython>=9.15.0",
     "jax[cuda13]>=0.10.1",
     "lightning>=2.6.1",
+    "pingouin>=0.7.0",
     "pooch>=1.9.0",
     "scib-metrics>=0.5.9",
     "scikit-learn>=1.8.0",

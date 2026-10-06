@@ -1,6 +1,7 @@
 # Directories
 .venv
 .vscode
+assets
 datasets
 logs
 
