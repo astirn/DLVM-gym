@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Categorical, Distribution
@@ -10,6 +11,16 @@ class Prior(Module, ABC):
     @property
     def has_global_latent_variables(self) -> bool:
         return False
+
+    @property
+    def alternating_inference(self) -> bool:
+        return False
+
+    def empirical_bayes_params(self) -> list[Tensor]:
+        raise NotImplementedError  # required when alternating_inference is True
+
+    def empirical_bayes_loss(self, batch: dict[str, Any]) -> Tensor:
+        raise NotImplementedError  # required when alternating_inference is True
 
     @property
     @abstractmethod

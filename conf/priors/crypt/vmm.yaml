@@ -1,0 +1,8 @@
+defaults:
+  - crypt/default@_here_
+  - _self_
+
+_target_: src.priors.crypt.VampPriorMixtureModel
+name: VMM
+concentration: 1.0
+num_data: ???

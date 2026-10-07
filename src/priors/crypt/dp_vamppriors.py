@@ -1,3 +1,5 @@
+from typing import Literal
+
 import torch
 from torch import Tensor
 from torch.distributions import (
@@ -17,17 +19,25 @@ class DirichletProcessVampPrior(VampPrior):
     def __init__(
         self,
         *,
-        num_data: int,
         concentration: float,
+        num_data: int,
+        posterior_init: Literal["prior", "uniform"] = "prior",
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.num_data = num_data
         self.concentration = concentration
+        self.num_data = num_data
+
+        # TODO: remove this hack
+        if concentration == 11.0:
+            posterior_init = "uniform"
 
         log_gamma_init = torch.zeros(self.k, 2)
-        log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
+        if posterior_init == "prior":
+            log_gamma_init[:, 1] = (torch.ones(self.k) * concentration).log()
+        elif posterior_init == "uniform":
+            log_gamma_init[:-1, 1] = torch.arange(self.k - 1, 0, -1).float().log()
 
         self.log_gamma = torch.nn.Parameter(log_gamma_init)
 

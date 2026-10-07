@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 import torch
-from toolz import identity
+from toolz import identity, valmap
 from torch import Tensor
 from torch.distributions import MultivariateNormal
 
@@ -19,39 +19,36 @@ class AbstractVampPrior(Prior, ABC):
         dim_z: int,
         k: int,
         encoder: torch.nn.Module,
-        u_initial: Tensor | list[Tensor],
-        u_constraint: CONSTRAINT_FN | list[CONSTRAINT_FN] | None = None,
+        q: Callable[..., MultivariateNormal],
+        u_initial: dict[str, Tensor],
+        u_constraint: dict[str, CONSTRAINT_FN] | None = None,
         **kwargs,
     ):
         super().__init__()
         self.dim_z = dim_z
         self.k = k
+        self.q = q
+
         self._encoder = encoder
-        if isinstance(u_initial, Tensor):
-            u_initial = [u_initial]
-        self._u = torch.nn.ParameterList([torch.nn.Parameter(u) for u in u_initial])
+        self._u = torch.nn.ParameterDict(valmap(torch.nn.Parameter, u_initial))
         if u_constraint is None:
-            u_constraint = [identity] * len(self._u)
-        elif not isinstance(u_constraint, list):
-            u_constraint = [u_constraint]
+            u_constraint = {k: identity for k in self._u}
         self._u_constraint = u_constraint
-        if len(self._u_constraint) != len(self._u):
-            raise ValueError(
-                "u_constraint must be a list of the same length as u_initial"
-            )
+        if set(self._u.keys()) != set(self._u_constraint.keys()):
+            raise ValueError("u_initial and u_constraint must have the same keys")
 
     @property
-    def u(self) -> list[Tensor]:
-        return [fn(u) for fn, u in zip(self._u_constraint, self._u)]
+    def u(self) -> dict[str, Tensor]:
+        return {k: self._u_constraint[k](self._u[k]) for k in self._u}
 
     @property
-    def qu(self) -> MultivariateNormal:
+    def qz_u(self) -> MultivariateNormal:
         was_training = self._encoder.training
         self._encoder.eval()
-        qu = self._encoder(*self.u)
+        qz_u = self._encoder(**self.u)
         if was_training:
             self._encoder.train()
-        return qu
+        return qz_u
 
     @property
     @abstractmethod

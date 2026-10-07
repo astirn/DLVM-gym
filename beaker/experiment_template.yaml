@@ -20,10 +20,19 @@ tasks:
         # Run script
         # bash scripts/clustering/baselines.sh mnist -n 5
         # bash scripts/clustering/baselines.sh fashion_mnist -n 5
+
         # bash scripts/clustering/sweep_k.sh mnist -n 5
         # bash scripts/clustering/sweep_k.sh fashion_mnist -n 5
+
         # bash scripts/clustering/sweep_dp_conc.sh mnist -n 5
         # bash scripts/clustering/sweep_dp_conc.sh fashion_mnist -n 5
+
+        # bash scripts/scRNA/op_baselines.sh op_dkd -n 1
+        # bash scripts/scRNA/op_baselines.sh op_immune_cell_atlas -n 1
+        # bash scripts/scRNA/op_baselines.sh op_gtex_v9 -n 1
+        # bash scripts/scRNA/op_baselines.sh op_mouse_pancreas_atlas -n 1
+        # bash scripts/scRNA/op_baselines.sh op_hypomap -n 1
+        # bash scripts/scRNA/op_baselines.sh op_tabula_sapiens -n 1
 
         # bash scripts/scRNA/sweep_dp_conc.sh op_dkd -n 3
         # bash scripts/scRNA/sweep_dp_conc.sh op_immune_cell_atlas -n 3
@@ -53,6 +62,7 @@ tasks:
       preemptible: false
 
     constraints:
-      cluster: [ai1/octo.ai-aws-g6e]
+      cluster: [ai1/octo.ai-aws-g6e]  # L40
+      # cluster: [ai1/octo.ai-aws-p5en]  # H200
 
     timeout: 720h
