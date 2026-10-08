@@ -1,0 +1,6 @@
+defaults:
+  - crypt/default@_here_
+  - _self_
+
+_target_: src.priors.crypt.VampPriorUnleashed
+name: VampPriorUnleashed

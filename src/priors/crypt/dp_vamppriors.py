@@ -11,7 +11,7 @@ from torch.distributions import (
     kl_divergence,
 )
 
-from .vamppriors import VampPrior, VampPriorUnchained
+from .vamppriors import VampPrior, VampPriorUnleashed
 
 
 class DirichletProcessVampPrior(VampPrior):
@@ -151,10 +151,10 @@ class DirichletProcessVampPrior(VampPrior):
         return pz_v.log_prob(z)
 
 
-class DirichletProcessVampPriorUnchained(DirichletProcessVampPrior, VampPriorUnchained):
+class DirichletProcessVampPriorUnleashed(DirichletProcessVampPrior, VampPriorUnleashed):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def log_pz_c(self, z: Tensor) -> Tensor:
-        return VampPriorUnchained.log_pz_c(self, z)
+        return VampPriorUnleashed.log_pz_c(self, z)

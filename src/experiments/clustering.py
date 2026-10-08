@@ -6,6 +6,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from src.fit import fit
+from src.utils import softplus_inverse
 
 
 class Encoder(nn.Module):
@@ -20,12 +21,12 @@ class Encoder(nn.Module):
             nn.ELU(),
         )
         self.mu = nn.Linear(2000, dim_z)
-        self.log_sigma = nn.Linear(2000, dim_z)
+        self.sigma = nn.Sequential(nn.Linear(2000, dim_z), nn.Softplus())
 
     def forward(self, x: torch.Tensor) -> dist.MultivariateNormal:
         out = self.net(x)
         mu = self.mu(out)
-        sigma = self.log_sigma(out).exp()
+        sigma = self.sigma(out)
         return dist.MultivariateNormal(mu, scale_tril=torch.diag_embed(sigma))
 
 
@@ -40,12 +41,11 @@ class Decoder(nn.Module):
             nn.Linear(500, 500),
             nn.ELU(),
             nn.Linear(500, dim_x),
-            nn.Tanh(),
         )
-        self.log_sigma = nn.Parameter(torch.as_tensor(0.0))
+        self.log_sigma = nn.Parameter(softplus_inverse(torch.as_tensor(1.0)))
 
     def forward(self, z: torch.Tensor) -> dist.Distribution:
-        scale = self.log_sigma.exp()
+        scale = nn.functional.softplus(self.log_sigma)
         return dist.Independent(dist.Normal(self.mu(z), scale), 1)
 
 
