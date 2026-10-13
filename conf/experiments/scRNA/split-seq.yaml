@@ -17,6 +17,8 @@ data:
         columns:
           polydT: batch
           cellchat_clusters: cell_type
+  val_ratio: 0.1
+  test_ratio: 0.4
 
 model:
   encode_covariates: true
@@ -30,7 +32,8 @@ model:
 analyses:
   - _target_: src.analysis.differential_expression.differential_expression
     _partial_: true
+    checkpoint_callback: ${callbacks.checkpoint_loss}
     condition_column: "DX"
     group1: "5xFAD"
     group2: "WT"
-    fig_name: ${model.prior_params.name}.pdf
+    tag: ${model.prior_params.name}

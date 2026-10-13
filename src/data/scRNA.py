@@ -131,6 +131,22 @@ class scRNADataModule(BaseDataModule):
     def num_genes(self) -> int:
         return self.counts.shape[1]  # type: ignore[attr-defined]
 
+    @property
+    def train_index(self) -> np.ndarray | None:
+        return self._train_index
+
+    @property
+    def val_index(self) -> np.ndarray | None:
+        return self._val_index
+
+    @property
+    def test_index(self) -> np.ndarray | None:
+        return self._test_index
+
+    @property
+    def predict_index(self) -> np.ndarray | None:
+        return self._predict_index
+
     def prepare_data(self, adata: AnnData | None = None) -> None:
         adata = adata if adata is not None else self.prepare_data_fn(self.root)
         counts = sp.csr_matrix(adata.X)
@@ -211,6 +227,3 @@ class scRNADataModule(BaseDataModule):
             shuffle=False,
             **self._dl_kwargs(split="val"),
         )
-
-    def set_predict_index(self, np_index: np.ndarray) -> None:
-        self._predict_index = np_index
