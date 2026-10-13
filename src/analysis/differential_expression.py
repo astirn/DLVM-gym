@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -62,21 +64,23 @@ def differential_expression(
     de_obs.dropna(axis=0, how="any", inplace=True)
     de_pred.dropna(axis=0, how="any", inplace=True)
 
-    x = de_obs.values.reshape(-1)
-    y = de_pred.values.reshape(-1)
+    de_obs = de_obs.values.reshape(-1)
+    np.save(Path(save_path) / f"de_obs.npy", de_obs)
+    de_pred = de_pred.values.reshape(-1)
+    np.save(Path(save_path) / f"de_pred.npy", de_pred)
 
     # plot all conditional differential expression
     plt.figure(figsize=(8, 8))
-    sns.regplot(x=x, y=y)
+    sns.regplot(x=de_obs, y=de_pred, scatter_kws={"rasterized": True})
     plt.xlabel("Observed DE")
     plt.ylabel("Predicted DE")
     plt.title(f"Differential Expression: {group1} vs {group2}")
     plt.text(
         0.05,
         0.95,
-        f"Pearson r = {np.corrcoef(x, y)[0, 1]:.3f}",
+        f"Pearson r = {np.corrcoef(de_obs, de_pred)[0, 1]:.3f}",
         transform=plt.gca().transAxes,
         verticalalignment="top",
     )
-    plt.savefig(save_path)
+    plt.savefig(Path(save_path) / f"diff_exp.pdf")
     plt.close()
