@@ -16,9 +16,9 @@ def differential_expression(
     model: ModelWrapper,
     trainer: Trainer,
     save_path: str,
-    condition_column: str = "DX",
-    group1: str = "5xFAD",
-    group2: str = "WT",
+    condition_column: str,
+    group1: str,
+    group2: str,
 ):
     # get model predictions
     predictions = trainer.predict(model, datamodule=datamodule)

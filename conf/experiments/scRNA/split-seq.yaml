@@ -23,13 +23,13 @@ model:
   deeply_inject_covariates: true
 
   prior_params:
-    dim_z: ${model.dim_z}
     concentration: 5.0
-    concentration_prior: null
 
   u_initial_strategy: stratified_data
-  kl_warmup_epochs: 0 # openproblems uses full 400-epoch KL warmup
 
 analyses:
   - _target_: src.analysis.differential_expression.differential_expression
     _partial_: true
+    condition_column: "DX"
+    group1: "5xFAD"
+    group2: "WT"
