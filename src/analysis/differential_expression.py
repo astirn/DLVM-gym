@@ -18,9 +18,11 @@ def differential_expression(
     model: ModelWrapper,
     trainer: Trainer,
     save_path: str,
+    *,
     condition_column: str,
     group1: str,
     group2: str,
+    fig_name: str,
 ):
     # get model predictions
     predictions = trainer.predict(model, datamodule=datamodule)
@@ -82,5 +84,5 @@ def differential_expression(
         transform=plt.gca().transAxes,
         verticalalignment="top",
     )
-    plt.savefig(Path(save_path) / f"diff_exp.pdf")
+    plt.savefig(Path(save_path) / fig_name)
     plt.close()

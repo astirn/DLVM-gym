@@ -10,7 +10,7 @@ ENCODE_COVARIATES="true"
 SEED="1"
 
 # Standard normal prior
-PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATASET} --multirun \
+PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATASET} \
     hydra.launcher.n_jobs=$N_JOBS \
     model.encode_covariates=$ENCODE_COVARIATES \
     model.kl_warmup_epochs='${trainer.max_epochs}' \
@@ -20,7 +20,7 @@ PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATA
     seed=$SEED
 
 # DP VampPrior Unleashed
-PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATASET} --multirun \
+PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/${DATASET} \
     hydra.launcher.n_jobs=$N_JOBS \
     model.encode_covariates=$ENCODE_COVARIATES \
     model.kl_warmup_epochs=0 \

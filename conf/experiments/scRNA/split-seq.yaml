@@ -33,3 +33,4 @@ analyses:
     condition_column: "DX"
     group1: "5xFAD"
     group2: "WT"
+    fig_name: ${model.prior_params.name}.pdf
