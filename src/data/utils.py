@@ -41,6 +41,14 @@ def scread(
     return AnnData(obs=obs, var=var, layers={counts_layer: counts}, obsm=obsm)
 
 
+def load_split_seq(root: str) -> AnnData:
+    counts_path = Path(root) / "counts_small.npz"
+    meta_path = Path(root) / "cells_meta.tsv.gz"
+    counts = sp.load_npz(counts_path)
+    meta = pd.read_csv(meta_path, sep="\t", index_col=0)
+    return AnnData(X=counts, obs=meta)
+
+
 def rename_adata_obs(adata: AnnData, columns: dict[str, str]) -> AnnData:
     if isinstance(adata.obs, pd.DataFrame):
         adata.obs = adata.obs.rename(columns=columns)

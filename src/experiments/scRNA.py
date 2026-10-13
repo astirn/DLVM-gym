@@ -146,8 +146,9 @@ def main(cfg: DictConfig) -> None:
             ckpt_path=checkpoint_path(callbacks.checkpoint_loss),
         )
 
-    # instantiate full-set metrics
-    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    # collect full-set metrics at the various checkpoints
+    full_metrics = cfg.metrics.get("full_metrics", [])
+    model.test_metrics = list(map(instantiate, full_metrics))
     for key, ckpt_cfg in callbacks.items():
         if not key.startswith("checkpoint_"):
             continue
@@ -157,6 +158,11 @@ def main(cfg: DictConfig) -> None:
             datamodule.full_dataloader(),
             ckpt_path=checkpoint_path(ckpt_cfg),
         )
+
+    # run custom analyses
+    for analysis in cfg.get("analyses", []):
+        analysis = instantiate(analysis)
+        analysis(datamodule, model, trainer)
 
 
 if __name__ == "__main__":
