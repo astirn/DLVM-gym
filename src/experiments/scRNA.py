@@ -159,10 +159,12 @@ def main(cfg: DictConfig) -> None:
             ckpt_path=checkpoint_path(ckpt_cfg),
         )
 
-    # run custom analyses
+    # run requested analyses
     for analysis in cfg.get("analyses", []):
         analysis = instantiate(analysis)
-        analysis(datamodule, model, trainer)
+        analysis(datamodule, model, trainer, cfg.paths.output_dir)
+
+    print("Results saved to", cfg.paths.output_dir)
 
 
 if __name__ == "__main__":
