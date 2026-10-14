@@ -1,22 +1,12 @@
 # @package _global_
 
 defaults:
-  - op_default
+  - open_problems
+  - override /data/scRNA@data: split-seq
   - override /priors@model.prior_params: crypt/dp_vampprior_unleashed
   - _self_
 
 data:
-  dataset: split-seq
-  prepare_data_fn:
-    _target_: toolz.compose_left
-    _args_:
-      - _target_: src.data.utils.load_split_seq
-        _partial_: true
-      - _target_: src.data.utils.rename_adata_obs
-        _partial_: true
-        columns:
-          polydT: batch
-          cellchat_clusters: cell_type
   val_ratio: 0.1
   test_ratio: 0.4
 
