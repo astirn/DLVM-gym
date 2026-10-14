@@ -39,6 +39,10 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
         self.rho = rho
         self.eps = eps
 
+    @property
+    def mean(self) -> torch.Tensor:
+        return (1 - torch.sigmoid(self.rho)) * self.mu
+
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         log_p = (self.mu + self.eps).log() - (self.mu + self.theta + self.eps).log()
         log_1_minus_p = (self.theta + self.eps).log() - (
