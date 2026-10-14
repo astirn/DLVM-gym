@@ -115,7 +115,7 @@ def differential_expression(
 
     # plot all conditional differential expression
     plt.figure(figsize=(8, 8))
-    sns.regplot(x=de_obs, y=de_pred, scatter_kws={"rasterized": True, alpha=0.5})
+    sns.regplot(x=de_obs, y=de_pred, scatter_kws={"rasterized": True, "alpha": 0.5})
     plt.xlabel("Observed DE")
     plt.ylabel("Predicted DE")
     plt.title(f"Differential Expression: {group1} vs {group2}")
