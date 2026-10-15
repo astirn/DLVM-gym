@@ -6,6 +6,8 @@ defaults:
   - override /priors@model.prior_params: crypt/dp_vampprior_unleashed
   - _self_
 
+experiment_name: scRNA/DifferentialExpression/${data.dataset}
+
 data:
   val_ratio: 0.1
   test_ratio: 0.4

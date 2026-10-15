@@ -20,7 +20,7 @@ defaults:
   - /trainer@trainer: epoch_based
   - _self_
 
-experiment_name: scRNA/${data.dataset}
+experiment_name: scRNA/OpenProblems/${data.dataset}
 seed: 1
 
 data:
