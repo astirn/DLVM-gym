@@ -67,7 +67,7 @@ class scIBMetrics(Metric):
     def _bio_conservation_metrics(self, data: AnnData) -> BioConservation:
         return BioConservation(
             isolated_labels=True,
-            nmi_ari_cluster_labels_leiden=True,
+            nmi_ari_cluster_labels_leiden=False,
             nmi_ari_cluster_labels_kmeans=True,
             silhouette_label=True,
             clisi_knn=True,

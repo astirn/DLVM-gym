@@ -1,7 +1,7 @@
 [project]
-name = "vampprior-paradox"
+name = "dlvm-gym"
 version = "0.1.0"
-description = "Add your description here"
+description = "Deep Latent Variable Model Gym"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
