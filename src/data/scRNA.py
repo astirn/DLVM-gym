@@ -78,6 +78,11 @@ class scRNADataModule(BaseDataModule):
         self._cell_type_codes: torch.Tensor | None = None
         self._pca: np.ndarray | None = None
 
+        self._train_index: np.ndarray | None = None
+        self._val_index: np.ndarray | None = None
+        self._test_index: np.ndarray | None = None
+        self._predict_index: np.ndarray | None = None
+
     @property
     def adata(self) -> AnnData:
         return self.prepare_data_fn(self.root)
@@ -126,8 +131,24 @@ class scRNADataModule(BaseDataModule):
     def num_genes(self) -> int:
         return self.counts.shape[1]  # type: ignore[attr-defined]
 
-    def prepare_data(self) -> None:
-        adata = self.prepare_data_fn(self.root)
+    @property
+    def train_index(self) -> np.ndarray | None:
+        return self._train_index
+
+    @property
+    def val_index(self) -> np.ndarray | None:
+        return self._val_index
+
+    @property
+    def test_index(self) -> np.ndarray | None:
+        return self._test_index
+
+    @property
+    def predict_index(self) -> np.ndarray | None:
+        return self._predict_index
+
+    def prepare_data(self, adata: AnnData | None = None) -> None:
+        adata = adata if adata is not None else self.prepare_data_fn(self.root)
         counts = sp.csr_matrix(adata.X)
         if "X_pca" in adata.obsm:
             self._pca = np.asarray(adata.obsm["X_pca"], dtype=np.float32)
@@ -157,41 +178,41 @@ class scRNADataModule(BaseDataModule):
         n_test = int(self.num_data * self.test_ratio)
         n_train = self.num_data - n_val - n_test
 
-        train_idx = idx[:n_train]
-        val_idx = idx[n_train : n_train + n_val]
-        test_idx = idx[n_train + n_val :]
-        predict_idx = np.arange(self.num_data)
+        self._train_index = idx[:n_train]
+        self._val_index = idx[n_train : n_train + n_val]
+        self._test_index = idx[n_train + n_val :]
+        self._predict_index = np.arange(self.num_data)
 
         if fit and self.data["train"] is None:
             self.data["train"] = scRNADataset(
-                self.counts[train_idx],
-                self.batch_codes[train_idx],
-                self.cell_type_codes[train_idx],
-                self.pca[train_idx],
+                self.counts[self._train_index],
+                self.batch_codes[self._train_index],
+                self.cell_type_codes[self._train_index],
+                self.pca[self._train_index],
             )
 
         if (fit or validate) and self.data["val"] is None:
             self.data["val"] = scRNADataset(
-                self.counts[val_idx],
-                self.batch_codes[val_idx],
-                self.cell_type_codes[val_idx],
-                self.pca[val_idx],
+                self.counts[self._val_index],
+                self.batch_codes[self._val_index],
+                self.cell_type_codes[self._val_index],
+                self.pca[self._val_index],
             )
 
         if test and self.data["test"] is None:
             self.data["test"] = scRNADataset(
-                self.counts[test_idx],
-                self.batch_codes[test_idx],
-                self.cell_type_codes[test_idx],
-                self.pca[test_idx],
+                self.counts[self._test_index],
+                self.batch_codes[self._test_index],
+                self.cell_type_codes[self._test_index],
+                self.pca[self._test_index],
             )
 
         if predict and self.data["predict"] is None:
             self.data["predict"] = scRNADataset(
-                self.counts[predict_idx],
-                self.batch_codes[predict_idx],
-                self.cell_type_codes[predict_idx],
-                self.pca[predict_idx],
+                self.counts[self._predict_index],
+                self.batch_codes[self._predict_index],
+                self.cell_type_codes[self._predict_index],
+                self.pca[self._predict_index],
             )
 
     def full_dataloader(self) -> DataLoader:

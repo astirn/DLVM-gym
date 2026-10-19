@@ -1,3 +1,5 @@
+import logging
+
 import hydra
 import torch
 import torch.distributions as dist
@@ -9,6 +11,8 @@ from torch import Tensor
 from src.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial
 from src.experiments.utils import checkpoint_path
 from src.fit import fit
+
+logger = logging.getLogger(__name__)
 
 
 def _inject_into_layer(layer_idx: int, deeply_inject: bool) -> bool:
@@ -146,8 +150,9 @@ def main(cfg: DictConfig) -> None:
             ckpt_path=checkpoint_path(callbacks.checkpoint_loss),
         )
 
-    # instantiate full-set metrics
-    model.test_metrics = list(map(instantiate, cfg.metrics.full_metrics))
+    # collect full-set metrics at the various checkpoints
+    full_metrics = cfg.metrics.get("full_metrics", [])
+    model.test_metrics = list(map(instantiate, full_metrics))
     for key, ckpt_cfg in callbacks.items():
         if not key.startswith("checkpoint_"):
             continue
@@ -157,6 +162,26 @@ def main(cfg: DictConfig) -> None:
             datamodule.full_dataloader(),
             ckpt_path=checkpoint_path(ckpt_cfg),
         )
+
+    # restore last checkpoint
+    if "checkpoint_last" in callbacks:
+        ckpt = torch.load(
+            checkpoint_path(callbacks.checkpoint_last),
+            map_location=model.device,
+            weights_only=False,
+        )
+        model.load_state_dict(ckpt["state_dict"])
+    else:
+        logger.warning(
+            "No checkpoint_last callback configured, using the current model state."
+        )
+
+    # run requested analyses
+    for analysis in cfg.get("analyses", []):
+        analysis = instantiate(analysis)
+        analysis(datamodule, model, trainer, cfg.paths.output_dir)
+
+    print("Results saved to", cfg.paths.output_dir)
 
 
 if __name__ == "__main__":

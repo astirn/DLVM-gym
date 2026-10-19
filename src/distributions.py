@@ -10,17 +10,17 @@ class NegativeBinomial(dist.Distribution):
         self.theta = theta
         self.eps = eps
 
-    def log_prob(self, x: torch.Tensor) -> torch.Tensor:
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         log_p = (self.mu + self.eps).log() - (self.mu + self.theta + self.eps).log()
         log_1_minus_p = (self.theta + self.eps).log() - (
             self.mu + self.theta + self.eps
         ).log()
         log_prob = (
-            +x * log_p
+            +value * log_p
             + self.theta * log_1_minus_p
-            + (x + self.theta).lgamma()
+            + (value + self.theta).lgamma()
             - self.theta.lgamma()
-            - (x + 1).lgamma()
+            - (value + 1).lgamma()
         )
         return log_prob.sum(dim=-1)
 
@@ -39,7 +39,11 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
         self.rho = rho
         self.eps = eps
 
-    def log_prob(self, x: torch.Tensor) -> torch.Tensor:
+    @property
+    def mean(self) -> torch.Tensor:
+        return (1 - torch.sigmoid(self.rho)) * self.mu
+
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         log_p = (self.mu + self.eps).log() - (self.mu + self.theta + self.eps).log()
         log_1_minus_p = (self.theta + self.eps).log() - (
             self.mu + self.theta + self.eps
@@ -51,12 +55,12 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
             -self.rho
             - F.softplus(-self.rho)
             + self.theta * log_1_minus_p
-            + x * log_p
-            + (x + self.theta).lgamma()
+            + value * log_p
+            + (value + self.theta).lgamma()
             - self.theta.lgamma()
-            - (x + 1).lgamma()
+            - (value + 1).lgamma()
         )
-        log_prob = torch.where(torch.le(x, 1e-8), zero_ll, non_zero_ll)
+        log_prob = torch.where(torch.le(value, 1e-8), zero_ll, non_zero_ll)
         return log_prob.sum(dim=-1)
 
 
