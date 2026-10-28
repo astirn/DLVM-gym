@@ -8,7 +8,7 @@ from src.model_wrapper import ModelWrapper
 
 
 def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
-    if cfg.get("seed"):
+    if cfg.get("seed") is not None:
         seed_everything(cfg.seed, workers=True)
 
     datamodule = instantiate(cfg.data)
