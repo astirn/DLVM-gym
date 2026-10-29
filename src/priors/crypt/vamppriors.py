@@ -24,17 +24,15 @@ class VampPrior(AbstractVampPrior):
             pz_c,
         )
 
-    def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
+    def cluster_responsibilities(self, z: Tensor, **kwargs) -> dist.Categorical:
         return dist.Categorical(logits=self.log_pz_c(z))
 
-    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:
+    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor, **kwargs) -> Tensor:
         log_pz_c = self.log_pz_c(z_sample)
         dkl_z = -qz_x.entropy() - torch.logsumexp(log_pz_c - math.log(self.k), dim=-1)
         return dkl_z.mean()
 
-    def log_pz(
-        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
-    ) -> Tensor:
+    def log_pz(self, z: Tensor, **kwargs) -> Tensor:
         return self.pz.log_prob(z)
 
 

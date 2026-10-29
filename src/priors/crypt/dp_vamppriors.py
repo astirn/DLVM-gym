@@ -113,7 +113,7 @@ class DirichletProcessVampPrior(VampPrior):
         dkl_z = -qz_x.entropy() - (qc_z.probs * log_pz_c).sum(dim=-1)
         return dkl_z
 
-    def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor:
+    def dkl(self, qz_x: Distribution, z_sample: Tensor, **kwargs) -> Tensor:
         log_pz_c = self.log_pz_c(z_sample)
         e_log_v, e_log_vm1 = self.e_log_v_and_e_log_vm1()
         qc_z = self.qc(log_pz_c, e_log_v, e_log_vm1)
@@ -123,7 +123,7 @@ class DirichletProcessVampPrior(VampPrior):
         global_kl = self.dkl_v()
         return local_kl.mean() + global_kl / self.num_data
 
-    def cluster_responsibilities(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor, **kwargs) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         e_log_v, e_log_vm1 = self.e_log_v_and_e_log_vm1()
         qc_z = self.qc(log_pz_c, e_log_v, e_log_vm1)
@@ -135,7 +135,7 @@ class DirichletProcessVampPrior(VampPrior):
         return {"v": v}, log_pdq
 
     def log_pz(
-        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
+        self, z: Tensor, global_samples: dict[str, Tensor] | None = None, **kwargs
     ) -> Tensor:
         if global_samples is None:
             return self.pz.log_prob(z)

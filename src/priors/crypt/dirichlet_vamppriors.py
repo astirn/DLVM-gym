@@ -50,7 +50,7 @@ class DirichletVampPrior(VampPrior):
     def dkl_z(self, qz_x: Distribution, qc_z: Categorical, log_pz_c: Tensor) -> Tensor:
         return -qz_x.entropy() - (qc_z.probs * log_pz_c).sum(dim=-1)
 
-    def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor:
+    def dkl(self, qz_x: Distribution, z_sample: Tensor, **kwargs) -> Tensor:
         log_pz_c = self.log_pz_c(z_sample)
         e_log_pi = self.e_log_pi()
         qc_z = self.qc(log_pz_c, e_log_pi)
@@ -58,7 +58,7 @@ class DirichletVampPrior(VampPrior):
         global_kl = self.dkl_pi()
         return local_kl.mean() + global_kl / self.num_data
 
-    def cluster_responsibilities(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor, **kwargs) -> Categorical:
         log_pz_c = self.log_pz_c(z)
         e_log_pi = self.e_log_pi()
         return self.qc(log_pz_c, e_log_pi)

@@ -27,15 +27,13 @@ class Prior(Module, ABC):
     def pz(self) -> Distribution: ...
 
     @abstractmethod  # required for model training
-    def dkl(self, qz_x: Distribution, z_sample: Tensor) -> Tensor: ...
+    def dkl(self, qz_x: Distribution, z_sample: Tensor, **kwargs) -> Tensor: ...
 
-    def cluster_responsibilities(self, z: Tensor) -> Categorical:
+    def cluster_responsibilities(self, z: Tensor, **kwargs) -> Categorical:
         raise NotImplementedError  # optionally required for ClusteringMetrics
 
     def global_importance_sampling(self, k: int) -> tuple[dict[str, Tensor], Tensor]:
         raise NotImplementedError  # optionally required for ModelMetrics
 
-    def log_pz(
-        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
-    ) -> Tensor:
+    def log_pz(self, z: Tensor, **kwargs) -> Tensor:
         raise NotImplementedError  # optionally required for ModelMetrics

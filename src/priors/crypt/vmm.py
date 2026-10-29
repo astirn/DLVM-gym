@@ -125,15 +125,13 @@ class VampPriorMixtureModel(AbstractVampPrior):
             dist.Categorical(logits=self.pi_logits), self.pz_c
         )
 
-    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor) -> Tensor:
+    def dkl(self, qz_x: dist.Distribution, z_sample: Tensor, **kwargs) -> Tensor:
         return (-qz_x.entropy() - self.pz.log_prob(z_sample)).mean()
 
-    def cluster_responsibilities(self, z: Tensor) -> dist.Categorical:
+    def cluster_responsibilities(self, z: Tensor, **kwargs) -> dist.Categorical:
         return dist.Categorical(
             logits=self.log_pz_c(z, self.qz_u) + F.log_softmax(self.pi_logits, dim=-1)
         )
 
-    def log_pz(
-        self, z: Tensor, global_samples: dict[str, Tensor] | None = None
-    ) -> Tensor:
+    def log_pz(self, z: Tensor, **kwargs) -> Tensor:
         return self.pz.log_prob(z)
