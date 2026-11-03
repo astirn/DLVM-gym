@@ -150,19 +150,6 @@ def main(cfg: DictConfig) -> None:
             ckpt_path=checkpoint_path(callbacks.checkpoint_loss),
         )
 
-    # collect full-set metrics at the various checkpoints
-    full_metrics = cfg.metrics.get("full_metrics", [])
-    model.test_metrics = list(map(instantiate, full_metrics))
-    for key, ckpt_cfg in callbacks.items():
-        if not key.startswith("checkpoint_"):
-            continue
-        model.test_prefix = ckpt_cfg.filename
-        trainer.test(
-            model,
-            datamodule.full_dataloader(),
-            ckpt_path=checkpoint_path(ckpt_cfg),
-        )
-
     # restore last checkpoint
     if "checkpoint_last" in callbacks:
         ckpt = torch.load(
@@ -175,6 +162,12 @@ def main(cfg: DictConfig) -> None:
         logger.warning(
             "No checkpoint_last callback configured, using the current model state."
         )
+
+    # run full-set metrics
+    full_metrics = cfg.metrics.get("full_metrics", [])
+    model.test_metrics = list(map(instantiate, full_metrics))
+    model.test_prefix = "full"
+    trainer.test(model, datamodule.full_dataloader())
 
     # run requested analyses
     for analysis in cfg.get("analyses", []):
