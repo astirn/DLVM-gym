@@ -1,0 +1,11 @@
+dataset: split-seq
+prepare_data_fn:
+  _target_: toolz.compose_left
+  _args_:
+    - _target_: src.data.utils.load_split_seq
+      _partial_: true
+    - _target_: src.data.utils.rename_adata_obs
+      _partial_: true
+      columns:
+        polydT: batch
+        cellchat_clusters: cell_type
