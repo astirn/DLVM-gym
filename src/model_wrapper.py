@@ -214,7 +214,7 @@ class ModelWrapper(LightningModule, ABC):
 
         try:
             predictions["cluster_responsibilities"] = (
-                self.model.prior.cluster_responsibilities(z=z)
+                self.model.prior.cluster_responsibilities(z=z, group=batch.get("g"))
             )
         except NotImplementedError:
             pass

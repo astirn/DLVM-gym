@@ -17,11 +17,13 @@ class scRNADataset(Dataset):
         counts: sp.csr_matrix,
         batch_codes: torch.Tensor,
         cell_type_codes: torch.Tensor,
+        group_codes: torch.Tensor,
         pca: np.ndarray | None = None,
     ) -> None:
         self.counts = counts
         self.batch_codes = batch_codes
         self.cell_type_codes = cell_type_codes
+        self.group_codes = group_codes
         self.pca = pca
 
     def __len__(self) -> int:
@@ -33,6 +35,7 @@ class scRNADataset(Dataset):
             "x": torch.from_numpy(x),
             "c": self.cell_type_codes[idx].long(),
             "s": self.batch_codes[idx].long(),
+            "g": self.group_codes[idx].long(),
         }
         if self.pca is not None:
             item["x_pca"] = torch.from_numpy(self.pca[idx].astype(np.float32))
@@ -45,6 +48,7 @@ def collate(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         "l": torch.hstack([b["x"].sum(dim=1) for b in batch]),
         "c": torch.hstack([b["c"] for b in batch]),
         "s": torch.hstack([b["s"] for b in batch]),
+        "g": torch.hstack([b["g"] for b in batch]),
     }
     if "x_pca" in batch[0]:
         out["x_pca"] = torch.vstack([b["x_pca"] for b in batch])
@@ -60,6 +64,7 @@ class scRNADataModule(BaseDataModule):
         val_ratio: float = 0.1,
         test_ratio: float = 0.1,
         seed: int | None = None,
+        group_covariate: str = "batch",
         **kwargs,
     ) -> None:
         super().__init__(collate_fn=collate, **kwargs)
@@ -70,12 +75,15 @@ class scRNADataModule(BaseDataModule):
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
         self.seed = seed
+        self.group_covariate = group_covariate
 
         self._counts: sp.csr_matrix | None = None
         self._batch_keys: list[str] | None = None
         self._batch_codes: torch.Tensor | None = None
         self._cell_type_keys: list[str] | None = None
         self._cell_type_codes: torch.Tensor | None = None
+        self._group_keys: list[str] | None = None
+        self._group_codes: torch.Tensor | None = None
         self._pca: np.ndarray | None = None
 
     @property
@@ -113,6 +121,22 @@ class scRNADataModule(BaseDataModule):
         return self._cell_type_keys
 
     @property
+    def group_codes(self) -> torch.Tensor:
+        if self._group_codes is None:
+            raise ValueError("Property is not set. Call prepare_data first.")
+        return self._group_codes
+
+    @property
+    def group_keys(self) -> list[str]:
+        if self._group_keys is None:
+            raise ValueError("Property is not set. Call prepare_data first.")
+        return self._group_keys
+
+    @property
+    def num_groups(self) -> int:
+        return len(self.group_keys)
+
+    @property
     def pca(self) -> np.ndarray:
         if self._pca is None:
             raise ValueError("Property is not set. Call prepare_data first.")
@@ -137,10 +161,23 @@ class scRNADataModule(BaseDataModule):
             self._counts = counts.astype(np.int16)
         else:
             self._counts = counts.astype(np.int32)
-        for covariate in ["batch", "cell_type"]:
+        for attr, covariate in [
+            ("batch", "batch"),
+            ("cell_type", "cell_type"),
+            ("group", self.group_covariate),
+        ]:
             keys, codes = np.unique(adata.obs[covariate], return_inverse=True)
-            setattr(self, f"_{covariate}_keys", list(map(str, keys)))
-            setattr(self, f"_{covariate}_codes", torch.tensor(codes, dtype=torch.int32))
+            setattr(self, f"_{attr}_keys", list(map(str, keys)))
+            setattr(self, f"_{attr}_codes", torch.tensor(codes, dtype=torch.int32))
+
+    def _dataset(self, idx: np.ndarray) -> scRNADataset:
+        return scRNADataset(
+            self.counts[idx],
+            self.batch_codes[idx],
+            self.cell_type_codes[idx],
+            self.group_codes[idx],
+            self.pca[idx],
+        )
 
     def setup(self, stage: str | None = None) -> None:
         self._batch_size_per_device()
@@ -163,36 +200,16 @@ class scRNADataModule(BaseDataModule):
         predict_idx = np.arange(self.num_data)
 
         if fit and self.data["train"] is None:
-            self.data["train"] = scRNADataset(
-                self.counts[train_idx],
-                self.batch_codes[train_idx],
-                self.cell_type_codes[train_idx],
-                self.pca[train_idx],
-            )
+            self.data["train"] = self._dataset(train_idx)
 
         if (fit or validate) and self.data["val"] is None:
-            self.data["val"] = scRNADataset(
-                self.counts[val_idx],
-                self.batch_codes[val_idx],
-                self.cell_type_codes[val_idx],
-                self.pca[val_idx],
-            )
+            self.data["val"] = self._dataset(val_idx)
 
         if test and self.data["test"] is None:
-            self.data["test"] = scRNADataset(
-                self.counts[test_idx],
-                self.batch_codes[test_idx],
-                self.cell_type_codes[test_idx],
-                self.pca[test_idx],
-            )
+            self.data["test"] = self._dataset(test_idx)
 
         if predict and self.data["predict"] is None:
-            self.data["predict"] = scRNADataset(
-                self.counts[predict_idx],
-                self.batch_codes[predict_idx],
-                self.cell_type_codes[predict_idx],
-                self.pca[predict_idx],
-            )
+            self.data["predict"] = self._dataset(predict_idx)
 
     def full_dataloader(self) -> DataLoader:
         return DataLoader(

@@ -109,5 +109,6 @@ class scVI(DeepLatentVariableModel):
         z_sample = qz_xs.rsample()
         px_zsl = self.px(z=z_sample, s=s, l=l)
         beta = self.beta(epoch, global_step)
-        elbo = px_zsl.log_prob(x).mean() - beta * self.prior.dkl(qz_xs, z_sample)
+        dkl = self.prior.dkl(qz_xs, z_sample, group=batch.get("g"))
+        elbo = px_zsl.log_prob(x).mean() - beta * dkl
         return -elbo

@@ -16,9 +16,12 @@ def fit(cfg: DictConfig) -> tuple[BaseDataModule, ModelWrapper, Trainer]:
     datamodule.setup()
 
     metrics = valmap(instantiate, cfg.get("metrics", {}))
-    if cfg.model.prior_params.get("num_data", "???") == "???":
+    if OmegaConf.is_missing(cfg.model.prior_params, "num_data"):
         with open_dict(cfg):
             cfg.model.prior_params["num_data"] = datamodule.num_data
+    if OmegaConf.is_missing(cfg.model.prior_params, "num_groups"):
+        with open_dict(cfg):
+            cfg.model.prior_params["num_groups"] = datamodule.num_groups
     model_wrapper = ModelWrapper(
         model=instantiate(cfg.model, datamodule=datamodule),
         optimizer_params=dict(cfg.optimizer),

@@ -72,5 +72,6 @@ class VariationalAutoencoder(DeepLatentVariableModel):
         z_sample = qz_x.rsample()
         px_z = self.px(z=z_sample)
         beta = self.beta(epoch, global_step)
-        elbo = px_z.log_prob(x).mean() - beta * self.prior.dkl(qz_x, z_sample)
+        dkl = self.prior.dkl(qz_x, z_sample, group=batch.get("g"))
+        elbo = px_z.log_prob(x).mean() - beta * dkl
         return -elbo

@@ -21,7 +21,9 @@ class ClusteringMetrics(Metric):
             labels = batch[self.label_key]
 
             qz = model.qz(**batch)
-            cluster_responsibilities = model.prior.cluster_responsibilities(z=qz.loc)
+            cluster_responsibilities = model.prior.cluster_responsibilities(
+                z=qz.loc, group=batch.get("g")
+            )
             cluster_assignments = torch.argmax(cluster_responsibilities.probs, dim=1)
             max_responsibilities = cluster_responsibilities.probs.max(dim=0).values
             cluster_labels = labels[torch.argmax(cluster_responsibilities.probs, dim=0)]

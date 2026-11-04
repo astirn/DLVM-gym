@@ -57,7 +57,7 @@ class ModelMetrics(Metric):
         # for models without global latent variables, this computes the prior predictive
         # for models with global latent variables, this computes the posterior predictive
         # using analytically marginalized p(z) = E[p(z|global latents)] by not providing global samples
-        log_pz = model.prior.log_pz(z)
+        log_pz = model.prior.log_pz(z, group=batch.get("g"))
         log_w = log_pxz + log_pz - log_qz
         self.log_posterior_predictive += (
             torch.logsumexp(log_w, dim=-2) - log(self.k)
@@ -69,7 +69,8 @@ class ModelMetrics(Metric):
             for i in range(0, self.k, self.global_batch_size):
                 j = min(i + self.global_batch_size, self.k)
                 globals_batch = valmap(lambda x: x[i:j], self.global_samples)
-                log_w = log_pxz + model.prior.log_pz(z, globals_batch) - log_qz
+                log_pz_global = model.prior.log_pz(z, global_samples=globals_batch)
+                log_w = log_pxz + log_pz_global - log_qz
                 log_px.append(torch.logsumexp(log_w, dim=-2) - log(self.k))
             self.log_locals += torch.vstack(log_px).sum(dim=-1)
 
