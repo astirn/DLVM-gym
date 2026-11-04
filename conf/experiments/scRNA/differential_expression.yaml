@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - open_problems
+  - override /data/scRNA@data: split-seq
+  - override /priors@model.prior_params: crypt/dp_vampprior_unleashed
+  - _self_
+
+experiment_name: scRNA/DifferentialExpression/${data.dataset}
+
+data:
+  val_ratio: 0.1
+  test_ratio: 0.4
+
+model:
+  encode_covariates: true
+  deeply_inject_covariates: true
+
+  prior_params:
+    concentration: 5.0
+
+  u_initial_strategy: stratified_data
+
+analyses:
+  - _target_: src.analysis.differential_expression.differential_expression
+    _partial_: true
+    checkpoint_callback: ${callbacks.checkpoint_loss}
+    condition_column: "DX"
+    group1: "5xFAD"
+    group2: "WT"
+    tag: ${model.prior_params.name}

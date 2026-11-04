@@ -2,14 +2,14 @@ version: v2
 description: Experiment pipeline
 budget: ai1/octo.ai
 tasks:
-  - name: vampprior_unchained
+  - name: VampPrior-Unleashed
     image:
       beaker: astirn/base-dev
     command: [bash, -c]
     arguments:
       - |
         echo -e "\n=== Project Directory ==="
-        cd /home/andrew.stirn/projects/VampPrior-Paradox
+        cd /home/andrew.stirn/projects/DLVM-gym
         ls -la
 
         # Basic system info
@@ -27,24 +27,24 @@ tasks:
         # bash scripts/clustering/sweep_dp_conc.sh mnist -n 5
         # bash scripts/clustering/sweep_dp_conc.sh fashion_mnist -n 5
 
-        # bash scripts/scRNA/op_baselines.sh op_dkd -n 1
-        # bash scripts/scRNA/op_baselines.sh op_immune_cell_atlas -n 1
-        # bash scripts/scRNA/op_baselines.sh op_gtex_v9 -n 1
-        # bash scripts/scRNA/op_baselines.sh op_mouse_pancreas_atlas -n 1
-        # bash scripts/scRNA/op_baselines.sh op_hypomap -n 1
-        # bash scripts/scRNA/op_baselines.sh op_tabula_sapiens -n 1
+        # bash scripts/scRNA/baselines.sh dkd -n 1
+        # bash scripts/scRNA/baselines.sh immune_cell_atlas -n 1
+        # bash scripts/scRNA/baselines.sh gtex_v9 -n 1
+        # bash scripts/scRNA/baselines.sh mouse_pancreas_atlas -n 1
+        # bash scripts/scRNA/baselines.sh hypomap -n 1
+        # bash scripts/scRNA/baselines.sh tabula_sapiens -n 1
 
-        # bash scripts/scRNA/sweep_dp_conc.sh op_dkd -n 3
-        # bash scripts/scRNA/sweep_dp_conc.sh op_immune_cell_atlas -n 3
-        # bash scripts/scRNA/sweep_dp_conc.sh op_gtex_v9 -n 3
-        # bash scripts/scRNA/sweep_dp_conc.sh op_mouse_pancreas_atlas -n 3
-        # bash scripts/scRNA/sweep_dp_conc.sh op_hypomap -n 3
-        # bash scripts/scRNA/sweep_dp_conc.sh op_tabula_sapiens -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh dkd -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh immune_cell_atlas -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh gtex_v9 -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh mouse_pancreas_atlas -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh hypomap -n 3
+        # bash scripts/scRNA/sweep_dp_conc.sh tabula_sapiens -n 3
 
     datasets:
-      - mountPath: /home/andrew.stirn/projects/VampPrior-Paradox
+      - mountPath: /home/andrew.stirn/projects/DLVM-gym
         source:
-          hostPath: /home/andrew.stirn/projects/VampPrior-Paradox
+          hostPath: /home/andrew.stirn/projects/DLVM-gym
 
     envVars:
       - name: WANDB_API_KEY

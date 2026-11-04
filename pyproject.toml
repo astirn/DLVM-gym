@@ -1,5 +1,5 @@
 [project]
-name = "dlvm-gym"
+name = "DLVM-gym"
 version = "0.1.0"
 description = "Deep Latent Variable Model Gym"
 readme = "README.md"

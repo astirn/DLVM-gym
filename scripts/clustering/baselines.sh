@@ -17,7 +17,7 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     loggers.wandb.group='${experiment_name}/'"$SCRIPT_NAME" \
     loggers.wandb.mode=$WANDB_MODE \
     loggers.wandb.job_type=baseline \
-    loggers.wandb.tags=["v3"] \
+    loggers.wandb.tags=["v1"] \
     seed=$SEED
 
 # VMM (Stirn & Knowles, 2025)
@@ -33,5 +33,5 @@ PYTHONPATH=. uv run python src/experiments/clustering.py -cn experiments/cluster
     loggers.wandb.group='${experiment_name}/'"$SCRIPT_NAME" \
     loggers.wandb.mode=$WANDB_MODE \
     loggers.wandb.job_type=baseline \
-    loggers.wandb.tags=["v3"] \
+    loggers.wandb.tags=["v1"] \
     seed=$SEED
