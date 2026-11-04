@@ -64,10 +64,14 @@ class VampPriorMixtureModel(AbstractVampPrior):
         if qz_u is None:
             logger.warning("qz_u is not provided, using the default qz_u.")
             qz_u = self.qz_u
-        precision = self.precision_cholesky @ self.precision_cholesky.mT
+        precision_cholesky = self.precision_cholesky
+        precision = precision_cholesky @ precision_cholesky.mT
+        log_det_precision = 2 * precision_cholesky.diagonal(dim1=-2, dim2=-1).log().sum(
+            -1
+        )
         d = z.unsqueeze(1) - qz_u.loc.unsqueeze(0)
         return 0.5 * (
-            torch.logdet(precision / 2 / math.pi).unsqueeze(0)
+            (log_det_precision - self.dim_z * math.log(2 * math.pi)).unsqueeze(0)
             - (d.unsqueeze(-2) @ precision @ d.unsqueeze(-1)).squeeze(-1).squeeze(-1)
             - torch.diagonal(precision @ qz_u.covariance_matrix, dim1=-2, dim2=-1)
             .sum(-1)
