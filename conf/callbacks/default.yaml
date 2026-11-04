@@ -1,5 +1,0 @@
-defaults:
-  - checkpoint_last
-  - checkpoint_loss
-  - progress_bar_steps
-  - _self_
