@@ -7,6 +7,7 @@ import torch.distributions as dist
 import torch.nn.functional as F
 from torch import Tensor
 
+from src.distributions import Wishart
 from src.utils import softplus_inverse
 
 from .abstract import AbstractVampPrior
@@ -90,12 +91,13 @@ class VampPriorMixtureModel(AbstractVampPrior):
         return -0.5 * (constant + (squared_norm + trace_cov)).sum()
 
     def log_prior_prob_precision(self) -> Tensor:
-        prior_precision = dist.Wishart(
+        prior_precision = Wishart(
             df=self.dim_z + 2,
             scale_tril=self.get_buffer("wishart_scale_tril"),
         )
-        precision = self.precision_cholesky @ self.precision_cholesky.mT
-        return prior_precision.log_prob(precision).sum()
+        precision_cholesky = self.precision_cholesky
+        precision = precision_cholesky @ precision_cholesky.mT
+        return prior_precision.log_prob(precision, precision_cholesky).sum()
 
     def empirical_bayes_loss(self, batch: dict[str, Any]) -> Tensor:
         was_training = self._encoder.training

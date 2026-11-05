@@ -1,6 +1,9 @@
+import math
+
 import torch
 import torch.distributions as dist
 import torch.nn.functional as F
+from torch.distributions.wishart import Wishart as TorchWishart
 
 
 class NegativeBinomial(dist.Distribution):
@@ -62,6 +65,37 @@ class ZeroInflatedNegativeBinomial(dist.Distribution):
         )
         log_prob = torch.where(torch.le(value, 1e-8), zero_ll, non_zero_ll)
         return log_prob.sum(dim=-1)
+
+
+class Wishart(TorchWishart):
+    """Wishart whose log_prob avoids slogdet, which faults on some GPUs."""
+
+    def log_prob(self, value, value_tril=None):
+        """`value_tril` is the lower Cholesky factor of `value`; pass it when known."""
+        if value_tril is None:
+            value_tril = torch.linalg.cholesky(value)
+        if self._validate_args:
+            self._validate_sample(value)
+        nu = self.df  # has shape (batch_shape)
+        p = self._event_shape[-1]  # has singleton shape
+        scale_tril = self._unbroadcasted_scale_tril
+        log_det_value = 2 * value_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+        # tr(S^{-1} X) = ||L_S^{-1} L_X||_F^2
+        trace_term = (
+            torch.linalg.solve_triangular(scale_tril, value_tril, upper=False)
+            .square()
+            .sum(dim=(-2, -1))
+        )
+        return (
+            -nu
+            * (
+                p * math.log(2) / 2
+                + scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+            )
+            - torch.mvlgamma(nu / 2, p=p)
+            + (nu - p - 1) / 2 * log_det_value
+            - trace_term / 2
+        )
 
 
 def concat_distributions(distributions: list[dist.Distribution]) -> dist.Distribution:
