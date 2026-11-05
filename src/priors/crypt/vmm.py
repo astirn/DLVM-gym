@@ -98,8 +98,11 @@ class VampPriorMixtureModel(AbstractVampPrior):
         return prior_precision.log_prob(precision).sum()
 
     def empirical_bayes_loss(self, batch: dict[str, Any]) -> Tensor:
+        was_training = self._encoder.training
+        self._encoder.eval()
         with torch.no_grad():
             z = self.q(**batch).sample()
+        self._encoder.train(was_training)
 
         qz_u = self.qz_u
         log_prob_z_c = self.log_pz_c(z, qz_u)
