@@ -80,9 +80,11 @@ class VampPriorMixtureModel(AbstractVampPrior):
         )
 
     def log_prior_prob_pi(self) -> Tensor:
+        # Dirichlet log density via log_softmax; log(softmax) yields NaN grads once a weight underflows
         alpha = torch.full_like(self.pi_logits, self.concentration / self.k)
-        pi = F.softmax(self.pi_logits, dim=-1)
-        return dist.Dirichlet(alpha).log_prob(pi)
+        log_pi = F.log_softmax(self.pi_logits, dim=-1)
+        log_norm = torch.lgamma(alpha).sum() - torch.lgamma(alpha.sum())
+        return ((alpha - 1) * log_pi).sum() - log_norm
 
     def log_prior_prob_mu(self, qz_u: dist.MultivariateNormal) -> Tensor:
         constant = self.dim_z * math.log(2.0 * math.pi)
