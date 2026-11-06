@@ -27,12 +27,12 @@ tasks:
         # bash scripts/clustering/sweep_dp_conc.sh mnist -n 5
         # bash scripts/clustering/sweep_dp_conc.sh fashion_mnist -n 5
 
-        # bash scripts/scRNA/baselines.sh dkd -n 1
-        # bash scripts/scRNA/baselines.sh immune_cell_atlas -n 1
-        # bash scripts/scRNA/baselines.sh gtex_v9 -n 1
-        # bash scripts/scRNA/baselines.sh mouse_pancreas_atlas -n 1
-        # bash scripts/scRNA/baselines.sh hypomap -n 1
-        # bash scripts/scRNA/baselines.sh tabula_sapiens -n 1
+        # bash scripts/scRNA/baselines.sh dkd -n 3
+        # bash scripts/scRNA/baselines.sh immune_cell_atlas -n 3
+        # bash scripts/scRNA/baselines.sh gtex_v9 -n 3
+        # bash scripts/scRNA/baselines.sh mouse_pancreas_atlas -n 3
+        # bash scripts/scRNA/baselines.sh hypomap -n 3
+        # bash scripts/scRNA/baselines.sh tabula_sapiens -n 3
 
         # bash scripts/scRNA/sweep_dp_conc.sh dkd -n 3
         # bash scripts/scRNA/sweep_dp_conc.sh immune_cell_atlas -n 3
@@ -62,7 +62,8 @@ tasks:
       preemptible: false
 
     constraints:
-      cluster: [ai1/octo.ai-aws-g6e]  # L40
+      # cluster: [ai1/octo.ai-aws-g6e]  # L40
       # cluster: [ai1/octo.ai-aws-p5en]  # H200
+      hostname: [aws-brave-tortoise.tail2acc6.ts.net]
 
     timeout: 720h
