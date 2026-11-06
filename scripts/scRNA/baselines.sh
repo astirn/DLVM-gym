@@ -28,7 +28,6 @@ PYTHONPATH=. uv run python src/experiments/scRNA.py -cn experiments/scRNA/open_p
     hydra.launcher.n_jobs=$N_JOBS \
     model.encode_covariates=true \
     model.kl_warmup_epochs=0 \
-    model.prior_params.num_data='${data.batch_size.train}' \
     model.u_initial_strategy=data \
     paths.log_dir='logs/${experiment_name}/'"$SCRIPT_NAME" \
     priors@model.prior_params=crypt/vmm \
